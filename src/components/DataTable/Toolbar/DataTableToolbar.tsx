@@ -57,15 +57,11 @@ export const monospacefonts = [
 interface DataTableToolbarProps {
   selectedFont: typeof monospacefonts[0];
   onFontChange: (font: typeof monospacefonts[0]) => void;
-  onOpenGeneralSettings: () => void;
-  onOpenColumnSettings: () => void;
 }
 
 export function DataTableToolbar({
   selectedFont,
   onFontChange,
-  onOpenGeneralSettings,
-  onOpenColumnSettings,
 }: DataTableToolbarProps) {
   const { setTheme } = useTheme();
   const [open, setOpen] = useState(false);
@@ -131,19 +127,6 @@ export function DataTableToolbar({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56">
           <DropdownMenuLabel>Settings</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-
-          <DropdownMenuGroup>
-            <DropdownMenuItem onClick={onOpenGeneralSettings}>
-              <Sliders className="mr-2 h-4 w-4" />
-              <span>General Settings</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onOpenColumnSettings}>
-              <Columns className="mr-2 h-4 w-4" />
-              <span>Column Settings</span>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-
           <DropdownMenuSeparator />
 
           <DropdownMenuGroup>

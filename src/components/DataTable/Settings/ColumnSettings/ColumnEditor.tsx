@@ -9,7 +9,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { HexColorPicker } from "react-colorful";
 import { cn } from "@/lib/utils";
+import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, Underline } from "lucide-react";
 import type { ColumnState } from "./types";
+import { useState } from "react";
 
 const systemFonts = [
   "Arial",
@@ -113,87 +115,277 @@ interface FontSettingsProps {
   onChange: (settings: any) => void;
 }
 
+function ColorInput({ color, onChange }: { color: string; onChange: (color: string) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Input 
+        value={color} 
+        onChange={(e) => onChange(e.target.value)}
+        className="font-mono"
+      />
+      <Popover>
+        <PopoverTrigger asChild>
+          <div
+            className="h-8 w-8 rounded border cursor-pointer"
+            style={{ backgroundColor: color }}
+          />
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2" align="end">
+          <HexColorPicker
+            color={color}
+            onChange={onChange}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function FontSettings({ settings, onChange }: FontSettingsProps) {
+  const weightOptions = [
+    { label: 'Regular', value: 'normal' },
+    { label: 'Medium', value: 'medium' },
+    { label: 'Bold', value: 'bold' }
+  ];
+
   return (
     <div className="space-y-4">
-      <div>
-        <Label>Font Family</Label>
-        <Select value={settings.family} onValueChange={(value) => onChange({ ...settings, family: value })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {systemFonts.map((font) => (
-              <SelectItem key={font} value={font} style={{ fontFamily: font }}>
-                {font}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label>Font Size (px)</Label>
-        <div className="flex items-center space-x-4">
-          <Slider
-            value={[settings.size]}
-            onValueChange={([value]) => onChange({ ...settings, size: value })}
-            min={8}
-            max={32}
-            step={1}
-            className="flex-1"
-          />
-          <span className="w-12 text-sm tabular-nums">{settings.size}px</span>
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>Font Weight</Label>
-          <Select value={settings.weight} onValueChange={(value) => onChange({ ...settings, weight: value })}>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Font Weight</Label>
+          <Select 
+            value={settings.weight} 
+            onValueChange={(value) => onChange({ ...settings, weight: value })}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="bold">Bold</SelectItem>
+              {weightOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
-
         <div>
-          <Label>Font Style</Label>
-          <Select value={settings.style} onValueChange={(value) => onChange({ ...settings, style: value })}>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Font Size</Label>
+          <Select 
+            value={settings.size.toString()} 
+            onValueChange={(value) => onChange({ ...settings, size: parseInt(value) })}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="italic">Italic</SelectItem>
+              {Array.from({ length: 25 }, (_, i) => i + 8).map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
       <div>
-        <Label>Text Color</Label>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full"
-              style={{ backgroundColor: settings.color }}
-            >
-              <span className="sr-only">Pick color</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <HexColorPicker
-              color={settings.color}
-              onChange={(color) => onChange({ ...settings, color })}
+        <div className="flex items-center justify-between mb-1.5">
+          <Label className="text-xs text-muted-foreground">Text Style</Label>
+        </div>
+        <div className="flex gap-1">
+          <Button 
+            variant={settings.weight === 'bold' ? "default" : "outline"} 
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onChange({ 
+              ...settings, 
+              weight: settings.weight === 'bold' ? 'normal' : 'bold' 
+            })}
+          >
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant={settings.style === 'italic' ? "default" : "outline"} 
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onChange({ 
+              ...settings, 
+              style: settings.style === 'italic' ? 'normal' : 'italic' 
+            })}
+          >
+            <Italic className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="icon"
+            className="h-8 w-8"
+          >
+            <Underline className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AlignmentControls({ alignment, onChange }: { 
+  alignment: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      <Button 
+        variant={alignment === 'left' ? "default" : "outline"} 
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => onChange('left')}
+      >
+        <AlignLeft className="h-4 w-4" />
+      </Button>
+      <Button 
+        variant={alignment === 'center' ? "default" : "outline"} 
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => onChange('center')}
+      >
+        <AlignCenter className="h-4 w-4" />
+      </Button>
+      <Button 
+        variant={alignment === 'right' ? "default" : "outline"} 
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => onChange('right')}
+      >
+        <AlignRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function StyleBorderEditor({ 
+  borders, 
+  onChange 
+}: {
+  borders: {
+    top: { width: number; style: string; color: string };
+    right: { width: number; style: string; color: string };
+    bottom: { width: number; style: string; color: string };
+    left: { width: number; style: string; color: string };
+  };
+  onChange: (borders: any) => void;
+}) {
+  const [selectedSide, setSelectedSide] = useState<'top' | 'right' | 'bottom' | 'left'>('bottom');
+  const border = borders[selectedSide];
+
+  const updateBorder = (updatedBorder: typeof border) => {
+    onChange({
+      ...borders,
+      [selectedSide]: updatedBorder
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs text-muted-foreground mb-1.5 block">Border Side</Label>
+        <div className="flex gap-1 mb-3">
+          <Button 
+            variant={selectedSide === 'top' ? "default" : "outline"} 
+            size="sm"
+            className="flex-1"
+            onClick={() => setSelectedSide('top')}
+          >
+            Top
+          </Button>
+          <Button 
+            variant={selectedSide === 'right' ? "default" : "outline"} 
+            size="sm"
+            className="flex-1"
+            onClick={() => setSelectedSide('right')}
+          >
+            Right
+          </Button>
+          <Button 
+            variant={selectedSide === 'bottom' ? "default" : "outline"} 
+            size="sm"
+            className="flex-1"
+            onClick={() => setSelectedSide('bottom')}
+          >
+            Bottom
+          </Button>
+          <Button 
+            variant={selectedSide === 'left' ? "default" : "outline"} 
+            size="sm"
+            className="flex-1"
+            onClick={() => setSelectedSide('left')}
+          >
+            Left
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <Label className="text-xs text-muted-foreground mb-1.5 block">Border Style</Label>
+        <div className="flex items-center gap-2">
+          <Select value={border.style} onValueChange={(value) => updateBorder({ ...border, style: value })}>
+            <SelectTrigger className="w-[80px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {borderStyles.map((style) => (
+                <SelectItem key={style.value} value={style.value}>
+                  {style.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1">
+            <Input
+              type="text"
+              value={`${border.width}px`}
+              onChange={(e) => {
+                const value = parseInt(e.target.value.replace('px', ''));
+                if (!isNaN(value)) {
+                  updateBorder({ ...border, width: value });
+                }
+              }}
+              className="w-[60px]"
             />
-          </PopoverContent>
-        </Popover>
+          </div>
+          <div className="flex items-center">
+            <Popover>
+              <PopoverTrigger asChild>
+                <div
+                  className="h-6 w-6 rounded border cursor-pointer"
+                  style={{ backgroundColor: border.color }}
+                />
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-2" align="end">
+                <HexColorPicker
+                  color={border.color}
+                  onChange={(color) => updateBorder({ ...border, color })}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 p-3 border rounded-md">
+        <div 
+          className="h-12 w-full bg-background"
+          style={{
+            borderTop: borders.top.style !== 'none' ? `${borders.top.width}px ${borders.top.style} ${borders.top.color}` : 'none',
+            borderRight: borders.right.style !== 'none' ? `${borders.right.width}px ${borders.right.style} ${borders.right.color}` : 'none',
+            borderBottom: borders.bottom.style !== 'none' ? `${borders.bottom.width}px ${borders.bottom.style} ${borders.bottom.color}` : 'none',
+            borderLeft: borders.left.style !== 'none' ? `${borders.left.width}px ${borders.left.style} ${borders.left.color}` : 'none'
+          }}
+        >
+          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+            Border Preview
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -329,197 +521,309 @@ export function ColumnEditor({ columnId, state, onChange }: ColumnEditorProps) {
           </div>
         </TabsContent>
 
-        <TabsContent value="header" className="space-y-6 mt-4">
-          <div>
-            <Label className="text-base font-semibold">Header Appearance</Label>
-            <div className="mt-4 space-y-4">
-              <div>
-                <Label>Text Alignment</Label>
-                <Select
-                  value={state.headerAlignment}
-                  onValueChange={(value) => onChange({ headerAlignment: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="left">Left</SelectItem>
-                    <SelectItem value="center">Center</SelectItem>
-                    <SelectItem value="right">Right</SelectItem>
-                  </SelectContent>
-                </Select>
+        <TabsContent value="header" className="mt-4">
+          <Tabs defaultValue="typography" className="w-full">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-medium">Header Styling</h3>
+            </div>
+            <TabsList className="mb-3 grid grid-cols-3 h-9">
+              <TabsTrigger value="typography" className="text-xs">Typography</TabsTrigger>
+              <TabsTrigger value="colors" className="text-xs">Colors</TabsTrigger>
+              <TabsTrigger value="border" className="text-xs">Borders</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="typography" className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Font Weight</Label>
+                  <Select 
+                    value={state.headerFont.weight} 
+                    onValueChange={(value) => onChange({ 
+                      headerFont: { ...state.headerFont, weight: value } 
+                    })}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Regular</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="bold">Bold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Font Size</Label>
+                  <Select 
+                    value={state.headerFont.size.toString()} 
+                    onValueChange={(value) => onChange({ 
+                      headerFont: { ...state.headerFont, size: parseInt(value) } 
+                    })}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 17 }, (_, i) => i + 8).map((size) => (
+                        <SelectItem key={size} value={size.toString()}>
+                          {size}px
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <Label>Background Color</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      style={{ backgroundColor: state.headerBackgroundColor }}
+              <div className="flex flex-col space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs text-muted-foreground">Text Style</Label>
+                  <Label className="text-xs text-muted-foreground">Text Alignment</Label>
+                </div>
+                <div className="flex justify-between">
+                  <div className="flex gap-1">
+                    <Button 
+                      variant={state.headerFont.weight === 'bold' ? "default" : "outline"} 
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onChange({ 
+                        headerFont: { 
+                          ...state.headerFont, 
+                          weight: state.headerFont.weight === 'bold' ? 'normal' : 'bold' 
+                        }
+                      })}
                     >
-                      <span className="sr-only">Pick color</span>
+                      <Bold className="h-4 w-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <HexColorPicker
-                      color={state.headerBackgroundColor}
-                      onChange={(color) => onChange({ headerBackgroundColor: color })}
-                    />
-                  </PopoverContent>
-                </Popover>
+                    <Button 
+                      variant={state.headerFont.style === 'italic' ? "default" : "outline"} 
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onChange({ 
+                        headerFont: { 
+                          ...state.headerFont, 
+                          style: state.headerFont.style === 'italic' ? 'normal' : 'italic' 
+                        }
+                      })}
+                    >
+                      <Italic className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      className="h-8 w-8"
+                    >
+                      <Underline className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <AlignmentControls 
+                    alignment={state.headerAlignment}
+                    onChange={(headerAlignment) => onChange({ headerAlignment })}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="colors" className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Text Color</Label>
+                <ColorInput 
+                  color={state.headerFont.color}
+                  onChange={(color) => onChange({ 
+                    headerFont: { ...state.headerFont, color } 
+                  })}
+                />
+              </div>
+              
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Background Color</Label>
+                <ColorInput 
+                  color={state.headerBackgroundColor}
+                  onChange={(headerBackgroundColor) => onChange({ headerBackgroundColor })}
+                />
               </div>
 
-              <FontSettings
-                settings={state.headerFont}
-                onChange={(settings) => onChange({ headerFont: settings })}
-              />
-            </div>
-          </div>
+              <div className="mt-5 border rounded-md overflow-hidden">
+                <div
+                  className="p-4 flex items-center justify-center"
+                  style={{
+                    backgroundColor: state.headerBackgroundColor,
+                    color: state.headerFont.color,
+                    fontWeight: state.headerFont.weight,
+                    fontStyle: state.headerFont.style,
+                    fontSize: `${state.headerFont.size}px`,
+                    textAlign: state.headerAlignment,
+                    borderBottom: state.headerBorders.bottom.style !== 'none' ? 
+                      `${state.headerBorders.bottom.width}px ${state.headerBorders.bottom.style} ${state.headerBorders.bottom.color}` : 'none'
+                  }}
+                >
+                  Header Preview
+                </div>
+              </div>
+            </TabsContent>
 
-          <Separator />
-
-          <div>
-            <Label className="text-base font-semibold">Header Borders</Label>
-            <div className="mt-4 space-y-4">
-              <BorderEditor
-                label="Top Border"
-                border={state.headerBorders.top}
-                onChange={(border) => onChange({
-                  headerBorders: { ...state.headerBorders, top: border }
-                })}
+            <TabsContent value="border" className="space-y-3">
+              <StyleBorderEditor
+                borders={state.headerBorders}
+                onChange={(headerBorders) => onChange({ headerBorders })}
               />
-              <BorderEditor
-                label="Right Border"
-                border={state.headerBorders.right}
-                onChange={(border) => onChange({
-                  headerBorders: { ...state.headerBorders, right: border }
-                })}
-              />
-              <BorderEditor
-                label="Bottom Border"
-                border={state.headerBorders.bottom}
-                onChange={(border) => onChange({
-                  headerBorders: { ...state.headerBorders, bottom: border }
-                })}
-              />
-              <BorderEditor
-                label="Left Border"
-                border={state.headerBorders.left}
-                onChange={(border) => onChange({
-                  headerBorders: { ...state.headerBorders, left: border }
-                })}
-              />
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
-        <TabsContent value="cell" className="space-y-6 mt-4">
-          <div>
-            <Label className="text-base font-semibold">Cell Appearance</Label>
-            <div className="mt-4 space-y-4">
-              <div>
-                <Label>Horizontal Alignment</Label>
-                <Select
-                  value={state.cellAlignment.horizontal}
-                  onValueChange={(value) => onChange({
-                    cellAlignment: { ...state.cellAlignment, horizontal: value }
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="left">Left</SelectItem>
-                    <SelectItem value="center">Center</SelectItem>
-                    <SelectItem value="right">Right</SelectItem>
-                  </SelectContent>
-                </Select>
+        <TabsContent value="cell" className="mt-4">
+          <Tabs defaultValue="typography" className="w-full">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-medium">Cell Styling</h3>
+            </div>
+            <TabsList className="mb-3 grid grid-cols-3 h-9">
+              <TabsTrigger value="typography" className="text-xs">Typography</TabsTrigger>
+              <TabsTrigger value="colors" className="text-xs">Colors</TabsTrigger>
+              <TabsTrigger value="border" className="text-xs">Borders</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="typography" className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Font Weight</Label>
+                  <Select 
+                    value={state.cellFont.weight} 
+                    onValueChange={(value) => onChange({ 
+                      cellFont: { ...state.cellFont, weight: value } 
+                    })}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Regular</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="bold">Bold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Font Size</Label>
+                  <Select 
+                    value={state.cellFont.size.toString()} 
+                    onValueChange={(value) => onChange({ 
+                      cellFont: { ...state.cellFont, size: parseInt(value) } 
+                    })}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 17 }, (_, i) => i + 8).map((size) => (
+                        <SelectItem key={size} value={size.toString()}>
+                          {size}px
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <Label>Vertical Alignment</Label>
-                <Select
-                  value={state.cellAlignment.vertical}
-                  onValueChange={(value) => onChange({
-                    cellAlignment: { ...state.cellAlignment, vertical: value }
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="top">Top</SelectItem>
-                    <SelectItem value="middle">Middle</SelectItem>
-                    <SelectItem value="bottom">Bottom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Background Color</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      style={{ backgroundColor: state.cellBackgroundColor }}
+              <div className="flex flex-col space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs text-muted-foreground">Text Style</Label>
+                  <Label className="text-xs text-muted-foreground">Text Alignment</Label>
+                </div>
+                <div className="flex justify-between">
+                  <div className="flex gap-1">
+                    <Button 
+                      variant={state.cellFont.weight === 'bold' ? "default" : "outline"} 
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onChange({ 
+                        cellFont: { 
+                          ...state.cellFont, 
+                          weight: state.cellFont.weight === 'bold' ? 'normal' : 'bold' 
+                        }
+                      })}
                     >
-                      <span className="sr-only">Pick color</span>
+                      <Bold className="h-4 w-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <HexColorPicker
-                      color={state.cellBackgroundColor}
-                      onChange={(color) => onChange({ cellBackgroundColor: color })}
-                    />
-                  </PopoverContent>
-                </Popover>
+                    <Button 
+                      variant={state.cellFont.style === 'italic' ? "default" : "outline"} 
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onChange({ 
+                        cellFont: { 
+                          ...state.cellFont, 
+                          style: state.cellFont.style === 'italic' ? 'normal' : 'italic' 
+                        }
+                      })}
+                    >
+                      <Italic className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      className="h-8 w-8"
+                    >
+                      <Underline className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <AlignmentControls 
+                    alignment={state.cellAlignment.horizontal}
+                    onChange={(horizontal) => 
+                      onChange({ 
+                        cellAlignment: { 
+                          ...state.cellAlignment, 
+                          horizontal 
+                        } 
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="colors" className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Text Color</Label>
+                <ColorInput 
+                  color={state.cellFont.color}
+                  onChange={(color) => onChange({ 
+                    cellFont: { ...state.cellFont, color } 
+                  })}
+                />
+              </div>
+              
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Background Color</Label>
+                <ColorInput 
+                  color={state.cellBackgroundColor}
+                  onChange={(cellBackgroundColor) => onChange({ cellBackgroundColor })}
+                />
               </div>
 
-              <FontSettings
-                settings={state.cellFont}
-                onChange={(settings) => onChange({ cellFont: settings })}
-              />
-            </div>
-          </div>
+              <div className="mt-5 border rounded-md overflow-hidden">
+                <div
+                  className="p-4 flex items-center justify-center"
+                  style={{
+                    backgroundColor: state.cellBackgroundColor,
+                    color: state.cellFont.color,
+                    fontWeight: state.cellFont.weight,
+                    fontStyle: state.cellFont.style,
+                    fontSize: `${state.cellFont.size}px`,
+                    textAlign: state.cellAlignment.horizontal,
+                    borderBottom: state.cellBorders.bottom.style !== 'none' ? 
+                      `${state.cellBorders.bottom.width}px ${state.cellBorders.bottom.style} ${state.cellBorders.bottom.color}` : 'none'
+                  }}
+                >
+                  Cell Content Preview
+                </div>
+              </div>
+            </TabsContent>
 
-          <Separator />
-
-          <div>
-            <Label className="text-base font-semibold">Cell Borders</Label>
-            <div className="mt-4 space-y-4">
-              <BorderEditor
-                label="Top Border"
-                border={state.cellBorders.top}
-                onChange={(border) => onChange({
-                  cellBorders: { ...state.cellBorders, top: border }
-                })}
+            <TabsContent value="border" className="space-y-3">
+              <StyleBorderEditor
+                borders={state.cellBorders}
+                onChange={(cellBorders) => onChange({ cellBorders })}
               />
-              <BorderEditor
-                label="Right Border"
-                border={state.cellBorders.right}
-                onChange={(border) => onChange({
-                  cellBorders: { ...state.cellBorders, right: border }
-                })}
-              />
-              <BorderEditor
-                label="Bottom Border"
-                border={state.cellBorders.bottom}
-                onChange={(border) => onChange({
-                  cellBorders: { ...state.cellBorders, bottom: border }
-                })}
-              />
-              <BorderEditor
-                label="Left Border"
-                border={state.cellBorders.left}
-                onChange={(border) => onChange({
-                  cellBorders: { ...state.cellBorders, left: border }
-                })}
-              />
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
     </div>

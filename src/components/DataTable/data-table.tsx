@@ -4,8 +4,6 @@ import { ModuleRegistry } from 'ag-grid-community';
 import { AllEnterpriseModule } from 'ag-grid-enterprise';
 import { AgGridReact } from 'ag-grid-react';
 import { DataTableToolbar, monospacefonts } from './Toolbar/DataTableToolbar';
-import { GeneralSettingsDialog } from './Settings/GeneralSettingsDialog';
-import { ColumnSettingsDialog } from './Settings/ColumnSettings/ColumnSettingsDialog';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
 
@@ -19,12 +17,11 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   const { theme: currentTheme } = useTheme();
   const [selectedFont, setSelectedFont] = useState(monospacefonts[0]);
   const [gridTheme, setGridTheme] = useState(() => createGridTheme(monospacefonts[0].value));
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
-  const [gridReady, setGridReady] = useState(false);
   const gridRef = useRef<AgGridReact>(null);
 
-  const columnDefs = useMemo(() => generateColumnDefs(data), [data]);
+  const columnDefs = useMemo(() => {
+    return generateColumnDefs(data);
+  }, [data]);
 
   useEffect(() => {
     setDarkMode(currentTheme === 'dark');
@@ -46,8 +43,6 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   };
 
   const onGridReady = useCallback((params: any) => {
-    setGridReady(true);
-
     // Set initial focus to first cell
     setTimeout(() => {
       if (params.api && params.columnApi) {
@@ -57,23 +52,13 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         }
       }
     }, 100);
-  }, []);
-
-  const handleOpenColumnSettings = useCallback(() => {
-    if (!gridRef.current?.api) {
-      console.warn('Grid API not available');
-      return;
-    }
-    setColumnSettingsOpen(true);
-  }, []);
+  }, [columnDefs]);
 
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">
       <DataTableToolbar
         selectedFont={selectedFont}
         onFontChange={setSelectedFont}
-        onOpenGeneralSettings={() => setSettingsOpen(true)}
-        onOpenColumnSettings={handleOpenColumnSettings}
       />
 
       {/* AG Grid */}
@@ -95,19 +80,6 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
           suppressClearOnFillReduction={true}
         />
       </div>
-
-      <GeneralSettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-      />
-
-      {gridReady && (
-        <ColumnSettingsDialog
-          open={columnSettingsOpen}
-          onOpenChange={setColumnSettingsOpen}
-          gridRef={gridRef}
-        />
-      )}
     </div>
   );
 }
