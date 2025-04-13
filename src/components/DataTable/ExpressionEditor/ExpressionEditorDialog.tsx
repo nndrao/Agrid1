@@ -132,10 +132,10 @@ export function ExpressionEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[66vw] h-[54vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border-none shadow-lg">
+      <DialogContent className="sm:max-w-[79vw] h-[54vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border-none shadow-lg">
         <div className="p-6 pb-3">
-          <DialogTitle>Expression Editor</DialogTitle>
-          <DialogDescription>Create and edit expressions for data manipulation</DialogDescription>
+          <DialogTitle className="text-xl font-semibold">Expression Editor</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">Create and edit expressions for data manipulation</DialogDescription>
         </div>
         
         <div className="flex items-center gap-2 px-6 pb-4">
@@ -161,7 +161,7 @@ export function ExpressionEditorDialog({
 
         {/* Operator Toolbar */}
         <div className="px-6 pb-4">
-          <h4 className="text-sm font-medium mb-2">Operators</h4>
+          <h4 className="text-base font-medium mb-2">Operators</h4>
           <div className="flex flex-wrap gap-1">
             {operators.map(op => (
               <Button
@@ -182,7 +182,7 @@ export function ExpressionEditorDialog({
           <div className="col-span-3 border rounded-md overflow-hidden flex flex-col">
             <div className="p-2 border-b bg-muted flex items-center">
               <Code className="h-4 w-4 mr-2" />
-              <h3 className="text-sm font-medium">Functions</h3>
+              <h3 className="text-base font-semibold">Functions</h3>
             </div>
             <div className="p-2 border-b">
               <div className="relative">
@@ -220,7 +220,7 @@ export function ExpressionEditorDialog({
                     onMouseEnter={() => setHoveredFunction(fn)}
                     onMouseLeave={() => setHoveredFunction(null)}
                   >
-                    {fn.name}
+                    <span className="font-medium">{fn.name}</span>
                   </Button>
                 ))}
               </div>
@@ -232,7 +232,7 @@ export function ExpressionEditorDialog({
             {/* Expression Editor */}
             <div className="border rounded-md overflow-hidden flex flex-col flex-1">
               <div className="p-2 border-b bg-muted">
-                <h3 className="text-sm font-medium">Expression</h3>
+                <h3 className="text-base font-semibold">Expression</h3>
               </div>
               <div className="flex-1 overflow-hidden">
                 <ExpressionEditor
@@ -248,7 +248,7 @@ export function ExpressionEditorDialog({
             {(hoveredFunction || selectedFunction) && (
               <div className="border rounded-md overflow-hidden">
                 <div className="p-2 border-b bg-muted flex items-center justify-between">
-                  <h3 className="text-sm font-medium">Function Help</h3>
+                  <h3 className="text-base font-medium">Function Help</h3>
                   {(hoveredFunction || selectedFunction) && (
                     <Badge variant="secondary">{(hoveredFunction || selectedFunction).returnType}</Badge>
                   )}
@@ -262,7 +262,7 @@ export function ExpressionEditorDialog({
                   </p>
                   {(hoveredFunction || selectedFunction).example && (
                     <>
-                      <h4 className="text-xs font-medium mt-2">Example:</h4>
+                      <h4 className="text-sm font-medium mt-2">Example:</h4>
                       <pre className="bg-muted rounded-md p-2 text-xs font-mono overflow-auto">
                         {(hoveredFunction || selectedFunction).example}
                       </pre>
@@ -277,7 +277,7 @@ export function ExpressionEditorDialog({
           <div className="col-span-3 border rounded-md overflow-hidden flex flex-col">
             <div className="p-2 border-b bg-muted flex items-center">
               <List className="h-4 w-4 mr-2" />
-              <h3 className="text-sm font-medium">Columns</h3>
+              <h3 className="text-base font-semibold">Columns</h3>
             </div>
             <div className="p-2 border-b">
               <div className="relative">
@@ -299,7 +299,7 @@ export function ExpressionEditorDialog({
                     className="w-full justify-start font-mono text-sm h-8"
                     onClick={() => handleColumnClick(col)}
                   >
-                    {col.headerName || col.field}
+                    <span className="font-medium">{col.headerName || col.field}</span>
                   </Button>
                 ))}
               </div>
