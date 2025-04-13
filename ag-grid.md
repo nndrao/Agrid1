@@ -49,6 +49,16 @@
 - [Status Bar](https://www.ag-grid.com/react-data-grid/status-bar/)
 - [Menu Item Components](https://www.ag-grid.com/react-data-grid/component-menu-item/)
 - [Date Components](https://www.ag-grid.com/react-data-grid/component-date/)
+- [Context Menu Customization](https://www.ag-grid.com/react-data-grid/context-menu/)
+- [Column Menu Customization](https://www.ag-grid.com/react-data-grid/column-menu/)
+
+## Custom Components
+
+### Column Settings Dialog
+The Column Settings Dialog provides a user-friendly interface to:
+- Toggle column visibility
+- Manage column settings
+- Can be accessed via the context menu or dedicated button
 
 ## Features & Functionality
 

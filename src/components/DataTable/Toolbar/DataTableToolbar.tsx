@@ -43,6 +43,7 @@ import {
   Laptop,
   Sliders,
   Columns,
+  Code,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -57,66 +58,80 @@ export const monospacefonts = [
 interface DataTableToolbarProps {
   selectedFont: typeof monospacefonts[0];
   onFontChange: (font: typeof monospacefonts[0]) => void;
+  onOpenExpressionEditor: () => void;
 }
 
 export function DataTableToolbar({
   selectedFont,
   onFontChange,
+  onOpenExpressionEditor,
 }: DataTableToolbarProps) {
   const { setTheme } = useTheme();
   const [open, setOpen] = useState(false);
 
   return (
     <div className="flex h-[60px] items-center justify-between border-b bg-gray-50/50 px-4 dark:bg-gray-800/50">
-      {/* Font Selector */}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="w-[200px] justify-between"
-          >
-            <Type className="mr-2 h-4 w-4" />
-            {selectedFont.name}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0">
-          <Command value={selectedFont.value} shouldFilter={false}>
-            <CommandInput placeholder="Search font..." />
-            <CommandEmpty>No font found.</CommandEmpty>
-            <CommandGroup>
-              {monospacefonts.map((font) => (
-                <CommandItem
-                  key={font.value}
-                  value={font.name.toLowerCase()}
-                  onSelect={() => {
-                    onFontChange(font);
-                    document.documentElement.style.setProperty(
-                      '--ag-font-family',
-                      font.value
-                    );
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      'mr-2 h-4 w-4',
-                      selectedFont.value === font.value
-                        ? 'opacity-100'
-                        : 'opacity-0'
-                    )}
-                  />
-                  <span style={{ fontFamily: font.value }}>
-                    {font.name}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <div className="flex items-center space-x-2">
+        {/* Font Selector */}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-[200px] justify-between"
+            >
+              <Type className="mr-2 h-4 w-4" />
+              {selectedFont.name}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[200px] p-0">
+            <Command value={selectedFont.value} shouldFilter={false}>
+              <CommandInput placeholder="Search font..." />
+              <CommandEmpty>No font found.</CommandEmpty>
+              <CommandGroup>
+                {monospacefonts.map((font) => (
+                  <CommandItem
+                    key={font.value}
+                    value={font.name.toLowerCase()}
+                    onSelect={() => {
+                      onFontChange(font);
+                      document.documentElement.style.setProperty(
+                        '--ag-font-family',
+                        font.value
+                      );
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4',
+                        selectedFont.value === font.value
+                          ? 'opacity-100'
+                          : 'opacity-0'
+                      )}
+                    />
+                    <span style={{ fontFamily: font.value }}>
+                      {font.name}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        {/* Expression Editor Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onOpenExpressionEditor}
+          title="Expression Editor"
+        >
+          <Code className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Settings Menu */}
       <DropdownMenu>

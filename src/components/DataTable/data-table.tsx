@@ -6,6 +6,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { DataTableToolbar, monospacefonts } from './Toolbar/DataTableToolbar';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
+import { ExpressionEditorDialog } from './ExpressionEditor/ExpressionEditorDialog';
 
 ModuleRegistry.registerModules([AllEnterpriseModule]);
 
@@ -17,6 +18,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   const { theme: currentTheme } = useTheme();
   const [selectedFont, setSelectedFont] = useState(monospacefonts[0]);
   const [gridTheme, setGridTheme] = useState(() => createGridTheme(monospacefonts[0].value));
+  const [expressionEditorOpen, setExpressionEditorOpen] = useState(false);
   const gridRef = useRef<AgGridReact>(null);
 
   const columnDefs = useMemo(() => {
@@ -54,11 +56,18 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     }, 100);
   }, [columnDefs]);
 
+  const handleExpressionSave = useCallback((expression: any) => {
+    // TODO: Handle saving the expression
+    console.log('Expression saved:', expression);
+    setExpressionEditorOpen(false);
+  }, []);
+
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">
       <DataTableToolbar
         selectedFont={selectedFont}
         onFontChange={setSelectedFont}
+        onOpenExpressionEditor={() => setExpressionEditorOpen(true)}
       />
 
       {/* AG Grid */}
@@ -80,6 +89,14 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
           suppressClearOnFillReduction={true}
         />
       </div>
+
+      {/* Expression Editor Dialog */}
+      <ExpressionEditorDialog
+        open={expressionEditorOpen}
+        onClose={() => setExpressionEditorOpen(false)}
+        onSave={handleExpressionSave}
+        columnDefs={columnDefs}
+      />
     </div>
   );
 }
