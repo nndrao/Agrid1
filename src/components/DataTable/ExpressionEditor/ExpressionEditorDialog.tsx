@@ -132,7 +132,7 @@ export function ExpressionEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[55vw] h-[54vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border-none shadow-lg">
+      <DialogContent className="sm:max-w-[66vw] h-[54vh] flex flex-col overflow-hidden p-0 gap-0 bg-background border-none shadow-lg">
         <div className="p-6 pb-3">
           <DialogTitle>Expression Editor</DialogTitle>
           <DialogDescription>Create and edit expressions for data manipulation</DialogDescription>
