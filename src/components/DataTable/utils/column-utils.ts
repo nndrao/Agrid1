@@ -90,7 +90,7 @@ export function generateColumnDefs(data: any[]): any[] {
     if (inferredType === 'numericColumn') {
       return {
         ...baseColDef,
-        type: 'numericColumn',
+        type: 'customNumeric',
         filter: 'agNumberColumnFilter'
       };
     }
@@ -98,6 +98,7 @@ export function generateColumnDefs(data: any[]): any[] {
     if (inferredType === 'date') {
       return {
         ...baseColDef,
+        type: 'customDate',
         filter: 'agDateColumnFilter'
       };
     }
@@ -111,7 +112,6 @@ export function generateColumnDefs(data: any[]): any[] {
 
     return {
       ...baseColDef,
-      type: inferredType
     };
   });
 

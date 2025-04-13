@@ -3,10 +3,12 @@ import { useTheme } from 'next-themes';
 import { ModuleRegistry } from 'ag-grid-community';
 import { AllEnterpriseModule } from 'ag-grid-enterprise';
 import { AgGridReact } from 'ag-grid-react';
-import { DataTableToolbar, monospacefonts } from './Toolbar/DataTableToolbar';
+import { DataTableToolbar } from './Toolbar/DataTableToolbar';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
 import { ExpressionEditorDialog } from './ExpressionEditor/ExpressionEditorDialog';
+import { ColumnSettingsDialog } from './ColumnSettings/ColumnSettingsDialog';
+import { useGridStore } from '@/store/gridStore';
 
 ModuleRegistry.registerModules([AllEnterpriseModule]);
 
@@ -15,20 +17,54 @@ interface DataTableProps<TData> {
 }
 
 export function DataTable<TData>({ data }: DataTableProps<TData>) {
+  // Theme handling
   const { theme: currentTheme } = useTheme();
-  const [selectedFont, setSelectedFont] = useState(monospacefonts[0]);
-  const [gridTheme, setGridTheme] = useState(() => createGridTheme(monospacefonts[0].value));
+  
+  // Zustand store
+  const { 
+    settings, 
+    gridApi, 
+    setGridApi, 
+    initializeStore, 
+    applySettingsToGrid,
+    extractGridState,
+    getActiveProfile
+  } = useGridStore();
+  
+  // Local state
+  // Default font value
+  const defaultFontValue = "'JetBrains Mono', monospace";
+
+  // Initialize with safe access to settings
+  const [gridTheme, setGridTheme] = useState(() => 
+    createGridTheme(settings?.font?.value || defaultFontValue)
+  );
   const [expressionEditorOpen, setExpressionEditorOpen] = useState(false);
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
   const gridRef = useRef<AgGridReact>(null);
 
+  // Column definitions
   const columnDefs = useMemo(() => {
     return generateColumnDefs(data);
   }, [data]);
 
+  // Initialize the grid theme when the theme or font changes
   useEffect(() => {
     setDarkMode(currentTheme === 'dark');
-    setGridTheme(createGridTheme(selectedFont.value));
-  }, [currentTheme, selectedFont]);
+    setGridTheme(createGridTheme(settings?.font?.value || defaultFontValue));
+  }, [currentTheme, settings?.font, defaultFontValue]);
+
+  // Initialize the store once on component mount
+  useEffect(() => {
+    initializeStore();
+  }, [initializeStore]);
+  
+  // Apply settings whenever they change
+  useEffect(() => {
+    if (gridApi) {
+      applySettingsToGrid();
+    }
+  }, [settings, gridApi, applySettingsToGrid]);
 
   function setDarkMode(enabled: boolean) {
     document.body.dataset.agThemeMode = enabled ? 'dark' : 'light';
@@ -43,18 +79,47 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     enablePivot: true,
     editable: true,
   };
+  
+  // Define column types for the grid
+  const columnTypes = {
+    customNumeric: {
+      filter: 'agNumberColumnFilter',
+      headerClass: 'ag-right-aligned-header',
+      cellClass: 'ag-right-aligned-cell',
+    },
+    customDate: {
+      filter: 'agDateColumnFilter',
+    }
+  };
 
   const onGridReady = useCallback((params: any) => {
-    // Set initial focus to first cell
-    setTimeout(() => {
-      if (params.api && params.columnApi) {
-        const columns = params.columnApi.getAllDisplayedColumns();
-        if (columns.length > 0) {
-          params.api.setFocusedCell(0, columns[0].getColId());
+    if (!params || !params.api) {
+      console.warn('Grid API not available in onGridReady');
+      return;
+    }
+    
+    try {
+      // Set up grid API reference in the store
+      setGridApi(params.api);
+      
+      // Apply current settings to grid
+      setTimeout(() => {
+        applySettingsToGrid();
+      }, 0);
+      
+      // Set initial focus to first cell
+      setTimeout(() => {
+        if (params.api && params.columnApi) {
+          const columns = params.columnApi.getAllDisplayedColumns();
+          if (columns && columns.length > 0) {
+            params.api.setFocusedCell(0, columns[0].getColId());
+          }
         }
-      }
-    }, 100);
-  }, [columnDefs]);
+      }, 100);
+    } catch (error) {
+      console.error('Error in onGridReady:', error);
+    }
+  }, [setGridApi, applySettingsToGrid]);
 
   const handleExpressionSave = useCallback((expression: any) => {
     // TODO: Handle saving the expression
@@ -62,12 +127,28 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     setExpressionEditorOpen(false);
   }, []);
 
+  // Save grid state before closing or when requested
+  const saveGridState = useCallback(() => {
+    if (gridRef.current && gridRef.current.api) {
+      extractGridState();
+    }
+  }, [extractGridState]);
+  
+  const handleColumnSettingsApply = useCallback((updatedColumns: any[]) => {
+    // Update the column definitions in the grid
+    if (gridRef.current && gridRef.current.api) {
+      gridRef.current.api.setColumnDefs(updatedColumns);
+      
+      // Extract updated grid state after changes
+      saveGridState();
+    }
+  }, [saveGridState]);
+
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">
       <DataTableToolbar
-        selectedFont={selectedFont}
-        onFontChange={setSelectedFont}
         onOpenExpressionEditor={() => setExpressionEditorOpen(true)}
+        onOpenColumnSettings={() => setColumnSettingsOpen(true)}
       />
 
       {/* AG Grid */}
@@ -78,15 +159,20 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
           columnDefs={columnDefs}
           rowData={data}
           defaultColDef={defaultColDef}
+          columnTypes={columnTypes}
           sideBar={true}
           domLayout="normal"
           className="h-full w-full"
           onGridReady={onGridReady}
-          enableRangeSelection={true}
-          enableFillHandle={true}
-          enterMovesDown={false}
+          cellSelection={{ 
+            enabled: true,
+            handle: { 
+              enabled: true,
+              suppressClearOnFillReduction: true
+            }
+          }}
+          enterNavigatesVertically={false}
           stopEditingWhenCellsLoseFocus={false}
-          suppressClearOnFillReduction={true}
         />
       </div>
 
@@ -96,6 +182,14 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         onClose={() => setExpressionEditorOpen(false)}
         onSave={handleExpressionSave}
         columnDefs={columnDefs}
+      />
+
+      {/* Column Settings Dialog */}
+      <ColumnSettingsDialog
+        open={columnSettingsOpen}
+        onClose={() => setColumnSettingsOpen(false)}
+        columns={columnDefs}
+        onApply={handleColumnSettingsApply}
       />
     </div>
   );
