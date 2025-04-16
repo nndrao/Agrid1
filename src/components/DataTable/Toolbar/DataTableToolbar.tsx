@@ -27,10 +27,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogClose,
+
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,7 +58,7 @@ import {
   Moon,
   Sun,
   Laptop,
-  Sliders,
+
   Columns,
   Code,
   User,
@@ -95,12 +94,12 @@ export function DataTableToolbar({
   const [fontOpen, setFontOpen] = useState(false);
   const [profilesOpen, setProfilesOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
-  
+
   // Get store data and actions
   const {
     profiles,
     settings,
-    isDirty,
+
     createProfile,
     updateProfile,
     deleteProfile,
@@ -111,29 +110,29 @@ export function DataTableToolbar({
     exportProfile,
     importProfile
   } = useGridStore();
-  
+
   // Current active profile
   const activeProfile = getActiveProfile();
-  
+
   // Log for debugging
-  console.log("Current settings in toolbar:", { 
-    settings, 
-    fontSize: settings?.fontSize, 
-    density: settings?.density 
+  console.log("Current settings in toolbar:", {
+    settings,
+    fontSize: settings?.fontSize,
+    density: settings?.density
   });
-  
+
   // Ensure activeProfile has default values if somehow missing
   if (!activeProfile) {
     console.error('Active profile not found');
   }
-  
+
   // State for profile creation/editing
   const [editingProfile, setEditingProfile] = useState<typeof activeProfile | null>(null);
   const [newProfileName, setNewProfileName] = useState('');
   const [tempFont, setTempFont] = useState(settings?.font || monospacefonts[0]);
   const [tempFontSize, setTempFontSize] = useState(settings?.fontSize || defaultFontSize);
   const [tempDensity, setTempDensity] = useState(settings?.density || defaultDensity);
-  
+
   // Save profile handling
   const handleSaveProfile = () => {
     if (editingProfile) {
@@ -153,22 +152,22 @@ export function DataTableToolbar({
         density: tempDensity
       });
     }
-    
+
     // Reset and close dialog
     setProfileDialogOpen(false);
     setEditingProfile(null);
     setNewProfileName('');
   };
-  
+
   // Delete profile handling
   const handleDeleteProfile = (profileId: string) => {
     deleteProfile(profileId);
   };
-  
+
   // Edit profile
   const handleEditProfile = (profile: typeof activeProfile) => {
     if (profile.isDefault) return; // Cannot edit default profile
-    
+
     setEditingProfile(profile);
     setNewProfileName(profile.name);
     setTempFont(profile.font);
@@ -176,7 +175,7 @@ export function DataTableToolbar({
     setTempDensity(profile.density);
     setProfileDialogOpen(true);
   };
-  
+
   // Create new profile
   const handleNewProfile = () => {
     setEditingProfile(null);
@@ -186,24 +185,38 @@ export function DataTableToolbar({
     setTempDensity(settings.density);
     setProfileDialogOpen(true);
   };
-  
+
   // Apply profile
   const handleApplyProfile = (profileId: string) => {
     selectProfile(profileId);
   };
-  
+
   // Refs for debouncing
   const debounceTimers = useRef<Record<string, number>>({});
   // Local state for smoother slider interactions
   const [localFontSize, setLocalFontSize] = useState(settings?.fontSize || defaultFontSize);
   const [localDensity, setLocalDensity] = useState(settings?.density || defaultDensity);
-  
+
   // Sync local state with settings when they change
   useEffect(() => {
-    if (settings?.fontSize) setLocalFontSize(settings.fontSize);
-    if (settings?.density) setLocalDensity(settings.density);
+    if (settings?.fontSize) {
+      setLocalFontSize(settings.fontSize);
+      // Also apply CSS directly when settings change (e.g., when switching profiles)
+      document.documentElement.style.setProperty('--ag-font-size', `${settings.fontSize}px`);
+    }
+
+    if (settings?.density) {
+      setLocalDensity(settings.density);
+      // Also apply density CSS directly when settings change
+      const spacingValue = 4 + (settings.density - 1) * 4;
+      document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
+      document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
+      document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
+      document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
+      document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
+    }
   }, [settings?.fontSize, settings?.density]);
-  
+
   // Update a single setting with debounce
   const handleUpdateSetting = useCallback((key: string, value: any) => {
     // Update local state for immediate UI feedback
@@ -212,24 +225,25 @@ export function DataTableToolbar({
     } else if (key === 'density') {
       setLocalDensity(value);
     }
-    
+
     // For CSS-only properties, apply changes immediately to DOM
     if (key === 'fontSize') {
       document.documentElement.style.setProperty('--ag-font-size', `${value}px`);
     } else if (key === 'density') {
       const spacingValue = 4 + (value - 1) * 4;
+      // Apply density (convert density value to spacing pixels)
       document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
       document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
       document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
       document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
       document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
     }
-    
+
     // Clear any existing timer
     if (debounceTimers.current[key]) {
       window.clearTimeout(debounceTimers.current[key]);
     }
-    
+
     // Set a new timer to update the store
     debounceTimers.current[key] = window.setTimeout(() => {
       // Only update the store after a delay to prevent excessive renders
@@ -237,7 +251,7 @@ export function DataTableToolbar({
       console.log(`Updated setting in store: ${key} = ${value}`);
     }, 100); // 100ms debounce
   }, [updateSettings]);
-  
+
   // Get display name for density value
   const getDensityLabel = (densityValue: number): string => {
     if (densityValue <= 1.25) return 'Compact';
@@ -271,7 +285,7 @@ export function DataTableToolbar({
                 <CommandGroup heading="Profiles">
                   {profiles.map((profile) => (
                     <div key={profile.id} className="flex items-center justify-between px-2 py-1 hover:bg-muted">
-                      <div 
+                      <div
                         className="flex items-center flex-1 cursor-pointer"
                         onClick={() => {
                           handleApplyProfile(profile.id);
@@ -312,7 +326,7 @@ export function DataTableToolbar({
                   ))}
                 </CommandGroup>
                 <div className="p-1 border-t">
-                  <div 
+                  <div
                     className="flex items-center px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-muted"
                     onClick={() => {
                       handleNewProfile();
@@ -326,7 +340,7 @@ export function DataTableToolbar({
               </Command>
             </PopoverContent>
           </Popover>
-          
+
           {/* Save Profile Button */}
           <Button
             variant="outline"
@@ -500,10 +514,10 @@ export function DataTableToolbar({
               <label className="flex w-full cursor-pointer items-center">
                 <FileInput className="mr-2 h-4 w-4" />
                 <span>Import Settings</span>
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   accept=".json"
-                  className="hidden" 
+                  className="hidden"
                   onChange={(e) => {
                     try {
                       const file = e.target.files?.[0];
@@ -516,7 +530,7 @@ export function DataTableToolbar({
                               console.error('Failed to import profile: Empty file');
                               return;
                             }
-                            
+
                             // Try to parse the JSON first to validate
                             try {
                               JSON.parse(content);
@@ -524,7 +538,7 @@ export function DataTableToolbar({
                               console.error('Failed to import profile: Invalid JSON', parseError);
                               return;
                             }
-                            
+
                             // Import the profile
                             const success = importProfile(content);
                             if (success) {
@@ -538,14 +552,14 @@ export function DataTableToolbar({
                             console.error('Error during profile import:', error);
                           }
                         };
-                        
+
                         reader.onerror = () => {
                           console.error('Failed to read file');
                         };
-                        
+
                         reader.readAsText(file);
                       }
-                      
+
                       // Reset the input
                       if (e.target) {
                         e.target.value = '';
@@ -560,34 +574,34 @@ export function DataTableToolbar({
             <DropdownMenuItem onClick={() => {
               try {
                 const activeProfile = getActiveProfile();
-                
+
                 if (!activeProfile) {
                   console.error('No active profile found for export');
                   return;
                 }
-                
+
                 const profileJson = exportProfile(activeProfile.id);
-                
+
                 if (!profileJson) {
                   console.error('Failed to export profile: Empty data');
                   return;
                 }
-                
+
                 // Create and trigger download
                 const blob = new Blob([profileJson], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                
+
                 // Ensure the filename is valid
-                const filename = activeProfile.name 
+                const filename = activeProfile.name
                   ? `${activeProfile.name.replace(/\s+/g, '_')}_profile.json`
                   : 'grid_profile.json';
-                  
+
                 a.download = filename;
                 document.body.appendChild(a);
                 a.click();
-                
+
                 // Cleanup
                 URL.revokeObjectURL(url);
                 document.body.removeChild(a);
@@ -655,13 +669,13 @@ export function DataTableToolbar({
                 className="col-span-3"
               />
             </div>
-            
+
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="profile-font" className="text-right">
                 Font
               </Label>
               <div className="col-span-3">
-                <select 
+                <select
                   id="profile-font"
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   value={tempFont.value}
@@ -676,7 +690,7 @@ export function DataTableToolbar({
                 </select>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="profile-font-size" className="text-right">
                 Font Size
@@ -694,7 +708,7 @@ export function DataTableToolbar({
                 <span className="w-10 text-sm">{tempFontSize}px</span>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="profile-density" className="text-right">
                 Density

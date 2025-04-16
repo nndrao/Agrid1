@@ -19,24 +19,24 @@ interface DataTableProps<TData> {
 export function DataTable<TData>({ data }: DataTableProps<TData>) {
   // Theme handling
   const { theme: currentTheme } = useTheme();
-  
+
   // Zustand store
-  const { 
-    settings, 
-    gridApi, 
-    setGridApi, 
-    initializeStore, 
+  const {
+    settings,
+    gridApi,
+    setGridApi,
+    initializeStore,
     applySettingsToGrid,
     extractGridState,
     getActiveProfile
   } = useGridStore();
-  
+
   // Local state
   // Default font value
   const defaultFontValue = "'JetBrains Mono', monospace";
 
   // Initialize with safe access to settings
-  const [gridTheme, setGridTheme] = useState(() => 
+  const [gridTheme, setGridTheme] = useState(() =>
     createGridTheme(settings?.font?.value || defaultFontValue)
   );
   const [expressionEditorOpen, setExpressionEditorOpen] = useState(false);
@@ -58,13 +58,22 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   useEffect(() => {
     initializeStore();
   }, [initializeStore]);
-  
-  // Apply settings whenever they change
+
+  // Apply settings only when specific properties change that require grid refresh
+  // We exclude fontSize and density as they're handled via CSS directly
+  const { font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState } = settings || {};
+
   useEffect(() => {
     if (gridApi) {
+      // Only apply settings when properties that require grid refresh change
+      // This prevents unnecessary refreshes when saving profiles or changing fontSize/density
+      console.log('Applying settings due to grid-related property change');
       applySettingsToGrid();
     }
-  }, [settings, gridApi, applySettingsToGrid]);
+  }, [
+    font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState,
+    gridApi, applySettingsToGrid
+  ]);
 
   function setDarkMode(enabled: boolean) {
     document.body.dataset.agThemeMode = enabled ? 'dark' : 'light';
@@ -79,7 +88,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     enablePivot: true,
     editable: true,
   };
-  
+
   // Define column types for the grid
   const columnTypes = {
     customNumeric: {
@@ -97,16 +106,16 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       console.warn('Grid API not available in onGridReady');
       return;
     }
-    
+
     try {
       // Set up grid API reference in the store
       setGridApi(params.api);
-      
+
       // Apply current settings to grid
       setTimeout(() => {
         applySettingsToGrid();
       }, 0);
-      
+
       // Set initial focus to first cell
       setTimeout(() => {
         if (params.api && params.columnApi) {
@@ -133,12 +142,12 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       extractGridState();
     }
   }, [extractGridState]);
-  
+
   const handleColumnSettingsApply = useCallback((updatedColumns: any[]) => {
     // Update the column definitions in the grid
     if (gridRef.current && gridRef.current.api) {
-      gridRef.current.api.setColumnDefs(updatedColumns);
-      
+      gridRef.current.api.setGridOption('columnDefs', updatedColumns);
+
       // Extract updated grid state after changes
       saveGridState();
     }
@@ -164,9 +173,9 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
           domLayout="normal"
           className="h-full w-full"
           onGridReady={onGridReady}
-          cellSelection={{ 
+          cellSelection={{
             enabled: true,
-            handle: { 
+            handle: {
               enabled: true,
               suppressClearOnFillReduction: true
             }

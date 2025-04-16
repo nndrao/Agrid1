@@ -614,35 +614,25 @@ export const useGridStore = create<GridStore>()(
       },
 
       // Settings management
-      updateSettings: (partialSettings) => {
-        // First, update the settings in the store
+      updateSettings: (partialSettings: Partial<GridSettings>) => {
+        // Update the settings in state
         set(state => ({
-          settings: { ...state.settings, ...partialSettings },
+          settings: {
+            ...state.settings,
+            ...partialSettings
+          },
           isDirty: true
         }));
 
-        // Apply CSS changes directly if it's just font/density updates
-        if ('fontSize' in partialSettings || 'density' in partialSettings) {
-          // Update font size if provided
-          if ('fontSize' in partialSettings && partialSettings.fontSize) {
-            document.documentElement.style.setProperty('--ag-font-size', `${partialSettings.fontSize}px`);
-          }
-
-          // Update density if provided
-          if ('density' in partialSettings && typeof partialSettings.density === 'number') {
-            const density = partialSettings.density;
-            const spacingValue = 4 + (density - 1) * 4;
-            document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
-            document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
-            document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
-            document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
-            document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
-          }
-        }
-        // For other changes that need grid API updates, apply the full settings
-        else if ('font' in partialSettings || 'columnsState' in partialSettings ||
-                'filterState' in partialSettings || 'sortState' in partialSettings) {
-          // Use setTimeout to wait for state update to complete
+        // Only apply grid API updates for non-CSS properties
+        // Exclude fontSize and density as they're handled via CSS directly in the toolbar
+        if ('font' in partialSettings ||
+            'columnsState' in partialSettings ||
+            'filterState' in partialSettings ||
+            'sortState' in partialSettings ||
+            'rowGroupState' in partialSettings ||
+            'pivotState' in partialSettings ||
+            'chartState' in partialSettings) {
           setTimeout(() => {
             const { gridApi } = get();
             if (gridApi) {
@@ -730,9 +720,8 @@ export const useGridStore = create<GridStore>()(
         });
 
         if (activeProfile && !activeProfile.isDefault) {
-          // Save the current column state to a variable before updating the store
-          // This will be used to restore the column state after the update
-          const columnStateToRestore = columnsState;
+          // We used to save and restore column state here, but now we avoid refreshing the grid
+          // when saving a profile to prevent flickering
 
           set(state => {
             console.log('Updating profile in state');
@@ -763,22 +752,26 @@ export const useGridStore = create<GridStore>()(
             };
           });
 
-          // Restore the column state to prevent the grid from resetting column widths
-          // This is necessary because AG-Grid might reset column widths when the store is updated
-          if (columnStateToRestore && gridApi) {
+          // We need to preserve the current column state to prevent auto-sizing
+          // Apply only the column state back to the grid without triggering a full refresh
+          if (columnsState && gridApi) {
             try {
-              console.log('Restoring column state after profile save to prevent width reset');
+              console.log('Preserving column widths after profile save');
               // Use a small timeout to ensure the store update is complete
               setTimeout(() => {
+                // Only apply column state to preserve widths, without triggering other refreshes
                 gridApi.applyColumnState({
-                  state: columnStateToRestore,
+                  state: columnsState,
                   applyOrder: true
                 });
+                console.log('Column widths preserved successfully');
               }, 0);
             } catch (error) {
-              console.warn('Failed to restore column state after profile save:', error);
+              console.warn('Failed to preserve column widths after profile save:', error);
             }
           }
+
+          console.log('Profile saved successfully without full grid refresh');
 
           console.log('Profile updated successfully');
         } else {
@@ -895,31 +888,20 @@ export const useGridStore = create<GridStore>()(
         });
 
         try {
-          // Apply visual settings with safety checks
+          // Apply only font family setting - fontSize and density are handled directly in the toolbar
           const fontValue = settings.font.value || defaultFont.value;
-          const fontSize = settings.fontSize || defaultFontSize;
-          const density = typeof settings.density === 'number' ? settings.density : defaultDensity;
 
           // Debug info
-          console.log('Applying visual settings:', {
-            font: fontValue,
-            fontSize,
-            density
+          console.log('Applying font family setting:', {
+            font: fontValue
           });
 
-          // Apply font settings
+          // Apply only font family setting
           document.documentElement.style.setProperty('--ag-font-family', fontValue);
-          document.documentElement.style.setProperty('--ag-font-size', `${fontSize}px`);
 
-          // Apply density (convert density value to spacing pixels)
-          const spacingValue = 4 + (density - 1) * 4;
-          document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
-          document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
-          document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
-          document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
-          document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
-
-          // No cell refresh needed for CSS-only changes
+          // Note: We're intentionally NOT applying fontSize and density CSS here
+          // as they are handled directly in the toolbar component with direct DOM manipulation
+          // This prevents unnecessary grid refreshes when changing these values
         } catch (error) {
           console.error('Error applying visual settings:', error);
         }
