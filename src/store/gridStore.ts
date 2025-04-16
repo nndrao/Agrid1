@@ -48,14 +48,14 @@ export interface GridProfile {
     data?: unknown[];
     options?: Record<string, unknown>;
   };
-  
+
   // Dialog settings
   expressionEditorState?: any;
   columnSettingsState?: any;
-  
+
   // Theme
   themeMode?: 'light' | 'dark' | 'system';
-  
+
   // Timestamps
   createdAt: number;
   updatedAt: number;
@@ -69,7 +69,7 @@ interface GridSettings {
   };
   fontSize: number;
   density: number;
-  
+
   // Grid state
   columnsState: any;
   filterState: any;
@@ -77,11 +77,11 @@ interface GridSettings {
   rowGroupState: any;
   pivotState: any;
   chartState: any;
-  
+
   // Dialog settings
   expressionEditorState: any;
   columnSettingsState: any;
-  
+
   // Theme
   themeMode: 'light' | 'dark' | 'system';
 }
@@ -117,18 +117,18 @@ interface GridStore {
   // Profiles
   profiles: GridProfile[];
   activeProfileId: string;
-  
+
   // Current Settings (from active profile or modified)
   settings: GridSettings;
   isDirty: boolean;
-  
+
   // Grid API reference for operations
   gridApi: any | null;
-  
+
   // Actions
   initializeStore: () => void;
   setGridApi: (api: any) => void;
-  
+
   // Profile management
   getActiveProfile: () => GridProfile;
   selectProfile: (profileId: string) => void;
@@ -138,7 +138,7 @@ interface GridStore {
   exportProfile: (profileId: string) => string;
   importProfile: (profileJson: string) => boolean;
   duplicateProfile: (profileId: string, newName?: string) => void;
-  
+
   // Settings management
   updateSettings: (settings: Partial<GridSettings>) => void;
   saveSettingsToProfile: () => void;
@@ -146,11 +146,11 @@ interface GridStore {
   applySettingsToGrid: () => void;
   resetSettingsToProfile: () => void;
   setThemeMode: (mode: 'light' | 'dark' | 'system') => void;
-  
+
   // Dialog settings
   updateExpressionEditorState: (state: any) => void;
   updateColumnSettingsState: (state: any) => void;
-  
+
   // Utility functions
   getGridColumnState: () => any;
   getGridFilterState: () => any;
@@ -169,7 +169,7 @@ export const useGridStore = create<GridStore>()(
       // Initial state
       profiles: [defaultProfile],
       activeProfileId: defaultProfile.id,
-      
+
       settings: {
         font: defaultFont,
         fontSize: defaultFontSize,
@@ -184,23 +184,23 @@ export const useGridStore = create<GridStore>()(
         columnSettingsState: null,
         themeMode: 'system'
       },
-      
+
       isDirty: false,
       gridApi: null,
-      
+
       // Initialize store with default values
       initializeStore: () => {
         const { profiles, activeProfileId } = get();
-        
+
         // Ensure there is always a default profile
         if (!profiles || profiles.length === 0 || !profiles.some(p => p.isDefault)) {
           set(state => ({
             profiles: [defaultProfile, ...(state.profiles || []).filter(p => !p.isDefault)]
           }));
         }
-        
+
         const activeProfile = profiles?.find(p => p.id === activeProfileId) || defaultProfile;
-        
+
         // Reset settings from active profile with fallbacks to defaults
         set({
           activeProfileId: activeProfile.id, // Ensure we have a valid profile ID
@@ -221,22 +221,22 @@ export const useGridStore = create<GridStore>()(
           isDirty: false
         });
       },
-      
+
       // Set grid API
       setGridApi: (api) => {
         set({ gridApi: api });
       },
-      
+
       // Profile management
       getActiveProfile: () => {
         const { profiles, activeProfileId } = get();
-        
+
         // Make sure we have profiles and at least one is marked as default
         if (!profiles || profiles.length === 0 || !profiles.some(p => p.isDefault)) {
           get().initializeStore();
           return defaultProfile;
         }
-        
+
         // Find the active profile, fallback to default if not found
         const activeProfile = profiles.find(p => p.id === activeProfileId);
         if (!activeProfile) {
@@ -245,35 +245,38 @@ export const useGridStore = create<GridStore>()(
           setTimeout(() => get().selectProfile(defaultProfileItem.id), 0);
           return defaultProfileItem;
         }
-        
+
         return activeProfile;
       },
-      
+
       selectProfile: (profileId) => {
         try {
+          console.log(`Selecting profile with ID: ${profileId}`);
           const { profiles } = get();
-          
+
           // Validate profiles exists
           if (!profiles || !Array.isArray(profiles) || profiles.length === 0) {
             console.error('No profiles available for selection');
             get().initializeStore(); // Reinitialize with defaults
             return;
           }
-          
+
           // Find the profile or use default
           const profile = profiles.find(p => p.id === profileId);
-          
+
           if (!profile) {
             console.error(`Profile with ID ${profileId} not found`);
             // Get default profile instead
             const defaultProfileItem = profiles.find(p => p.isDefault) || defaultProfile;
-            
+
             if (!defaultProfileItem) {
               console.error('No default profile available');
               get().initializeStore();
               return;
             }
-            
+
+            console.log('Using default profile instead');
+
             // Use default profile
             set({
               activeProfileId: defaultProfileItem.id,
@@ -293,9 +296,17 @@ export const useGridStore = create<GridStore>()(
               },
               isDirty: false
             });
+
+            // Apply settings after a short delay
+            setTimeout(() => {
+              if (get().gridApi) {
+                get().applySettingsToGrid();
+              }
+            }, 100);
+
             return;
           }
-          
+
           // Ensure profile has all required properties with fallbacks
           const safeProfile = {
             ...profile,
@@ -304,7 +315,16 @@ export const useGridStore = create<GridStore>()(
             density: profile.density || defaultDensity,
             themeMode: profile.themeMode || 'system'
           };
-          
+
+          console.log('Selected profile:', {
+            id: safeProfile.id,
+            name: safeProfile.name,
+            hasColumnsState: !!safeProfile.columnsState,
+            columnsStateLength: safeProfile.columnsState ? safeProfile.columnsState.length : 0,
+            hasSortState: !!safeProfile.sortState,
+            hasFilterState: !!safeProfile.filterState
+          });
+
           // Flush and repopulate settings from the profile
           set({
             activeProfileId: profileId,
@@ -324,44 +344,47 @@ export const useGridStore = create<GridStore>()(
             },
             isDirty: false
           });
-          
-          // If grid API exists, apply settings immediately
+
+          // If grid API exists, apply settings after a short delay to ensure state is updated
           if (get().gridApi) {
             setTimeout(() => {
               try {
+                console.log('Applying settings after profile selection');
                 get().applySettingsToGrid();
               } catch (error) {
                 console.error('Error applying settings to grid:', error);
               }
-            }, 0);
+            }, 100); // Increased delay to ensure state is updated
+          } else {
+            console.warn('Grid API not available, settings will be applied when grid is ready');
           }
         } catch (error) {
           console.error('Error selecting profile:', error);
           get().initializeStore(); // Reinitialize with defaults
         }
       },
-      
+
       createProfile: (profile) => {
         const id = `profile-${Date.now()}`;
         const timestamp = Date.now();
-        
-        const newProfile: GridProfile = { 
-          ...profile, 
+
+        const newProfile: GridProfile = {
+          ...profile,
           id,
           createdAt: timestamp,
           updatedAt: timestamp
         };
-        
+
         set(state => ({
           profiles: [...state.profiles, newProfile],
           activeProfileId: id,
           isDirty: false
         }));
-        
+
         // Select the new profile to apply settings
         setTimeout(() => get().selectProfile(id), 0);
       },
-      
+
       updateProfile: (profileId, updates) => {
         // Cannot update default profile if isDefault is being changed
         if (updates.isDefault === false) {
@@ -370,11 +393,11 @@ export const useGridStore = create<GridStore>()(
             return; // Cannot remove default status
           }
         }
-        
+
         set(state => ({
-          profiles: state.profiles.map(p => 
-            p.id === profileId ? { 
-              ...p, 
+          profiles: state.profiles.map(p =>
+            p.id === profileId ? {
+              ...p,
               ...updates,
               updatedAt: Date.now()
             } : p
@@ -382,46 +405,117 @@ export const useGridStore = create<GridStore>()(
           isDirty: state.activeProfileId === profileId ? false : state.isDirty
         }));
       },
-      
+
       deleteProfile: (profileId) => {
         const { profiles, activeProfileId } = get();
-        
+
         // Cannot delete default profile
         const profileToDelete = profiles.find(p => p.id === profileId);
         if (profileToDelete?.isDefault) return;
-        
+
         const newProfiles = profiles.filter(p => p.id !== profileId);
-        
+
         // If deleting active profile, switch to default
         const newActiveId = activeProfileId === profileId
           ? (newProfiles.find(p => p.isDefault)?.id || newProfiles[0]?.id)
           : activeProfileId;
-        
+
         set({
           profiles: newProfiles,
           activeProfileId: newActiveId
         });
-        
+
         // If active profile changed, update settings
         if (newActiveId !== activeProfileId) {
           get().selectProfile(newActiveId);
         }
       },
-      
+
       exportProfile: (profileId) => {
-        const { profiles, activeProfileId } = get();
-        
-        // If exporting active profile, save current settings first
-        if (profileId === activeProfileId) {
-          get().saveSettingsToProfile();
+        const { activeProfileId, profiles } = get();
+
+        // Get the profile to export
+        let profileToExport = profiles.find(p => p.id === profileId);
+
+        // If exporting active profile, we need to get the latest grid state
+        if (profileId === activeProfileId && profileToExport) {
+          // Get the current grid state without applying it back to the grid
+          const { gridApi } = get();
+          if (gridApi) {
+            // Extract grid state directly without using saveSettingsToProfile to avoid grid refresh
+            let columnsState = null;
+            let filterState = null;
+            let sortState = null;
+            let rowGroupState = null;
+            let pivotState = null;
+            let chartState = null;
+
+            try {
+              // Use the current column state directly from the grid API
+              // This ensures we get the exact current state including any width changes
+              const currentColumnState = gridApi.getColumnState();
+              columnsState = JSON.parse(JSON.stringify(currentColumnState));
+              console.log('Using direct column state from grid API for export');
+            }
+            catch (e) {
+              console.warn('Failed to use direct column state for export, falling back to getGridColumnState', e);
+              try {
+                columnsState = get().getGridColumnState();
+              } catch (e2) {
+                console.warn('Failed to get column state for export', e2);
+              }
+            }
+
+            try { filterState = get().getGridFilterState(); }
+            catch (e) { console.warn('Failed to get filter state for export', e); }
+
+            try { sortState = get().getGridSortState(); }
+            catch (e) { console.warn('Failed to get sort state for export', e); }
+
+            try { rowGroupState = get().getGridRowGroupState(); }
+            catch (e) { console.warn('Failed to get row group state for export', e); }
+
+            try { pivotState = get().getGridPivotState(); }
+            catch (e) { console.warn('Failed to get pivot state for export', e); }
+
+            try { chartState = get().getGridChartState(); }
+            catch (e) { console.warn('Failed to get chart state for export', e); }
+
+            // Create a copy of the profile with the latest grid state
+            profileToExport = {
+              ...profileToExport,
+              columnsState: columnsState || profileToExport.columnsState,
+              filterState: filterState || profileToExport.filterState,
+              sortState: sortState || profileToExport.sortState,
+              rowGroupState: rowGroupState || profileToExport.rowGroupState,
+              pivotState: pivotState || profileToExport.pivotState,
+              chartState: chartState || profileToExport.chartState
+            };
+
+            // Save the current column state to a variable before exporting
+            // This will be used to restore the column state after the export
+            const columnStateToRestore = columnsState;
+
+            // Restore the column state to prevent the grid from resetting column widths
+            if (columnStateToRestore && gridApi) {
+              try {
+                console.log('Restoring column state after profile export to prevent width reset');
+                // Use a small timeout to ensure the export is complete
+                setTimeout(() => {
+                  gridApi.applyColumnState({
+                    state: columnStateToRestore,
+                    applyOrder: true
+                  });
+                }, 0);
+              } catch (error) {
+                console.warn('Failed to restore column state after profile export:', error);
+              }
+            }
+          }
         }
-        
-        // Get updated profile list
-        const updatedProfiles = get().profiles;
-        const profileToExport = updatedProfiles.find(p => p.id === profileId);
-        
+
         if (!profileToExport) return '';
-        
+
         // Create export-friendly version of the profile
         const exportData = {
           name: profileToExport.name,
@@ -439,24 +533,24 @@ export const useGridStore = create<GridStore>()(
           themeMode: profileToExport.themeMode,
           exportedAt: Date.now()
         };
-        
+
         return JSON.stringify(exportData, null, 2);
       },
-      
+
       importProfile: (profileJson) => {
         try {
           // Parse the JSON
           const importedData = JSON.parse(profileJson);
-          
+
           // Validate required fields
           if (!importedData.name || !importedData.font) {
             console.error('Import failed: Missing required fields');
             return false;
           }
-          
+
           // Generate new ID and timestamps
           const timestamp = Date.now();
-          
+
           // Create a properly structured profile
           const newProfile: GridProfile = {
             id: `profile-${timestamp}`,
@@ -465,45 +559,45 @@ export const useGridStore = create<GridStore>()(
             fontSize: importedData.fontSize || defaultFontSize,
             density: importedData.density || defaultDensity,
             isDefault: false, // Never import as default
-            
+
             // Grid state
             columnsState: importedData.columnsState || null,
-            filterState: importedData.filterState || null, 
+            filterState: importedData.filterState || null,
             sortState: importedData.sortState || null,
             rowGroupState: importedData.rowGroupState || null,
             pivotState: importedData.pivotState || null,
             chartState: importedData.chartState || null,
-            
+
             // Dialog settings
             expressionEditorState: importedData.expressionEditorState || null,
             columnSettingsState: importedData.columnSettingsState || null,
-            
+
             // Theme
             themeMode: importedData.themeMode || 'system',
-            
+
             // Timestamps
             createdAt: timestamp,
             updatedAt: timestamp
           };
-          
+
           // Add to profiles
           set(state => ({
             profiles: [...state.profiles, newProfile]
           }));
-          
+
           return true;
         } catch (error) {
           console.error('Import failed:', error);
           return false;
         }
       },
-      
+
       duplicateProfile: (profileId, newName) => {
         const { profiles } = get();
         const profileToDuplicate = profiles.find(p => p.id === profileId);
-        
+
         if (!profileToDuplicate) return;
-        
+
         const timestamp = Date.now();
         const duplicatedProfile: GridProfile = {
           ...profileToDuplicate,
@@ -513,12 +607,12 @@ export const useGridStore = create<GridStore>()(
           createdAt: timestamp,
           updatedAt: timestamp
         };
-        
+
         set(state => ({
           profiles: [...state.profiles, duplicatedProfile]
         }));
       },
-      
+
       // Settings management
       updateSettings: (partialSettings) => {
         // First, update the settings in the store
@@ -526,16 +620,14 @@ export const useGridStore = create<GridStore>()(
           settings: { ...state.settings, ...partialSettings },
           isDirty: true
         }));
-        
+
         // Apply CSS changes directly if it's just font/density updates
         if ('fontSize' in partialSettings || 'density' in partialSettings) {
-          const { settings } = get();
-          
           // Update font size if provided
           if ('fontSize' in partialSettings && partialSettings.fontSize) {
             document.documentElement.style.setProperty('--ag-font-size', `${partialSettings.fontSize}px`);
           }
-          
+
           // Update density if provided
           if ('density' in partialSettings && typeof partialSettings.density === 'number') {
             const density = partialSettings.density;
@@ -548,7 +640,7 @@ export const useGridStore = create<GridStore>()(
           }
         }
         // For other changes that need grid API updates, apply the full settings
-        else if ('font' in partialSettings || 'columnsState' in partialSettings || 
+        else if ('font' in partialSettings || 'columnsState' in partialSettings ||
                 'filterState' in partialSettings || 'sortState' in partialSettings) {
           // Use setTimeout to wait for state update to complete
           setTimeout(() => {
@@ -559,49 +651,151 @@ export const useGridStore = create<GridStore>()(
           }, 0);
         }
       },
-      
+
       saveSettingsToProfile: () => {
         const { activeProfileId, settings, profiles } = get();
         const activeProfile = profiles.find(p => p.id === activeProfileId);
-        
-        // Extract the latest grid state before saving
-        get().extractGridState();
-        const updatedSettings = get().settings;
-        
+
+        console.log('Saving settings to profile:', {
+          activeProfileId,
+          profileExists: !!activeProfile,
+          isDefault: activeProfile?.isDefault,
+          currentSettings: settings
+        });
+
+        // Get the current grid state without applying it back to the grid
+        const { gridApi } = get();
+        if (!gridApi) {
+          console.warn('Cannot extract grid state: gridApi is null');
+          return;
+        }
+
+        // Store the current column state for comparison
+        const currentColumnState = gridApi.getColumnState();
+        console.log('Current column state from grid API:', currentColumnState);
+
+        // Extract grid state directly without using extractGridState to avoid grid refresh
+        let columnsState = null;
+        let filterState = null;
+        let sortState = null;
+        let rowGroupState = null;
+        let pivotState = null;
+        let chartState = null;
+
+        try {
+          // Use the current column state directly from the grid API
+          // This ensures we get the exact current state including any width changes
+          columnsState = JSON.parse(JSON.stringify(currentColumnState));
+          console.log('Using direct column state from grid API');
+        }
+        catch (e) {
+          console.warn('Failed to use direct column state, falling back to getGridColumnState', e);
+          try {
+            columnsState = get().getGridColumnState();
+          } catch (e2) {
+            console.warn('Failed to get column state', e2);
+          }
+        }
+
+        try { filterState = get().getGridFilterState(); }
+        catch (e) { console.warn('Failed to get filter state', e); }
+
+        try { sortState = get().getGridSortState(); }
+        catch (e) { console.warn('Failed to get sort state', e); }
+
+        try { rowGroupState = get().getGridRowGroupState(); }
+        catch (e) { console.warn('Failed to get row group state', e); }
+
+        try { pivotState = get().getGridPivotState(); }
+        catch (e) { console.warn('Failed to get pivot state', e); }
+
+        try { chartState = get().getGridChartState(); }
+        catch (e) { console.warn('Failed to get chart state', e); }
+
+        // Create updated settings without changing the current settings object
+        const updatedSettings = { ...settings };
+
+        // Only update properties that were successfully retrieved
+        if (columnsState !== null) updatedSettings.columnsState = columnsState;
+        if (filterState !== null) updatedSettings.filterState = filterState;
+        if (sortState !== null) updatedSettings.sortState = sortState;
+        if (rowGroupState !== null) updatedSettings.rowGroupState = rowGroupState;
+        if (pivotState !== null) updatedSettings.pivotState = pivotState;
+        if (chartState !== null) updatedSettings.chartState = chartState;
+
+        console.log('Updated settings for profile save:', {
+          columnsState: updatedSettings.columnsState,
+          filterState: updatedSettings.filterState,
+          sortState: updatedSettings.sortState
+        });
+
         if (activeProfile && !activeProfile.isDefault) {
-          set(state => ({
-            profiles: state.profiles.map(p => 
-              p.id === activeProfileId
-                ? {
-                    ...p,
-                    font: updatedSettings.font,
-                    fontSize: updatedSettings.fontSize,
-                    density: updatedSettings.density,
-                    columnsState: updatedSettings.columnsState,
-                    filterState: updatedSettings.filterState,
-                    sortState: updatedSettings.sortState,
-                    rowGroupState: updatedSettings.rowGroupState,
-                    pivotState: updatedSettings.pivotState,
-                    chartState: updatedSettings.chartState,
-                    expressionEditorState: updatedSettings.expressionEditorState,
-                    columnSettingsState: updatedSettings.columnSettingsState,
-                    themeMode: updatedSettings.themeMode,
-                    updatedAt: Date.now()
-                  }
-                : p
-            ),
-            isDirty: false
-          }));
+          // Save the current column state to a variable before updating the store
+          // This will be used to restore the column state after the update
+          const columnStateToRestore = columnsState;
+
+          set(state => {
+            console.log('Updating profile in state');
+            return {
+              profiles: state.profiles.map(p =>
+                p.id === activeProfileId
+                  ? {
+                      ...p,
+                      font: updatedSettings.font,
+                      fontSize: updatedSettings.fontSize,
+                      density: updatedSettings.density,
+                      columnsState: updatedSettings.columnsState,
+                      filterState: updatedSettings.filterState,
+                      sortState: updatedSettings.sortState,
+                      rowGroupState: updatedSettings.rowGroupState,
+                      pivotState: updatedSettings.pivotState,
+                      chartState: updatedSettings.chartState,
+                      expressionEditorState: updatedSettings.expressionEditorState,
+                      columnSettingsState: updatedSettings.columnSettingsState,
+                      themeMode: updatedSettings.themeMode,
+                      updatedAt: Date.now()
+                    }
+                  : p
+              ),
+              // Only update isDirty flag, don't update the settings object
+              // This prevents the grid from refreshing
+              isDirty: false
+            };
+          });
+
+          // Restore the column state to prevent the grid from resetting column widths
+          // This is necessary because AG-Grid might reset column widths when the store is updated
+          if (columnStateToRestore && gridApi) {
+            try {
+              console.log('Restoring column state after profile save to prevent width reset');
+              // Use a small timeout to ensure the store update is complete
+              setTimeout(() => {
+                gridApi.applyColumnState({
+                  state: columnStateToRestore,
+                  applyOrder: true
+                });
+              }, 0);
+            } catch (error) {
+              console.warn('Failed to restore column state after profile save:', error);
+            }
+          }
+
+          console.log('Profile updated successfully');
+        } else {
+          console.log('Profile not updated: either not found or is default profile');
         }
       },
-      
+
       extractGridState: () => {
         const { gridApi } = get();
-        if (!gridApi) return;
-        
+        if (!gridApi) {
+          console.warn('Cannot extract grid state: gridApi is null');
+          return;
+        }
+
         try {
           console.log('Extracting grid state');
-          
+
           // Get all available states, with error handling for each one
           let columnsState = null;
           let filterState = null;
@@ -609,29 +803,47 @@ export const useGridStore = create<GridStore>()(
           let rowGroupState = null;
           let pivotState = null;
           let chartState = null;
-          
-          try { columnsState = get().getGridColumnState(); } 
+
+          try {
+            columnsState = get().getGridColumnState();
+            console.log('Column state extracted:', columnsState);
+          }
           catch (e) { console.warn('Failed to get column state', e); }
-          
-          try { filterState = get().getGridFilterState(); } 
+
+          try {
+            filterState = get().getGridFilterState();
+            console.log('Filter state extracted:', filterState);
+          }
           catch (e) { console.warn('Failed to get filter state', e); }
-          
-          try { sortState = get().getGridSortState(); } 
+
+          try {
+            sortState = get().getGridSortState();
+            console.log('Sort state extracted:', sortState);
+          }
           catch (e) { console.warn('Failed to get sort state', e); }
-          
-          try { rowGroupState = get().getGridRowGroupState(); } 
+
+          try {
+            rowGroupState = get().getGridRowGroupState();
+            console.log('Row group state extracted:', rowGroupState);
+          }
           catch (e) { console.warn('Failed to get row group state', e); }
-          
-          try { pivotState = get().getGridPivotState(); } 
+
+          try {
+            pivotState = get().getGridPivotState();
+            console.log('Pivot state extracted:', pivotState);
+          }
           catch (e) { console.warn('Failed to get pivot state', e); }
-          
-          try { chartState = get().getGridChartState(); } 
+
+          try {
+            chartState = get().getGridChartState();
+            console.log('Chart state extracted:', chartState);
+          }
           catch (e) { console.warn('Failed to get chart state', e); }
-          
+
           // Update settings with current grid state, but only for states we could successfully get
           set(state => {
             const newSettings = { ...state.settings };
-            
+
             // Only update properties that were successfully retrieved
             if (columnsState !== null) newSettings.columnsState = columnsState;
             if (filterState !== null) newSettings.filterState = filterState;
@@ -639,46 +851,66 @@ export const useGridStore = create<GridStore>()(
             if (rowGroupState !== null) newSettings.rowGroupState = rowGroupState;
             if (pivotState !== null) newSettings.pivotState = pivotState;
             if (chartState !== null) newSettings.chartState = chartState;
-            
+
+            console.log('Updating settings with extracted grid state:', {
+              hasColumnsState: columnsState !== null,
+              hasFilterState: filterState !== null,
+              hasSortState: sortState !== null,
+              hasRowGroupState: rowGroupState !== null,
+              hasPivotState: pivotState !== null,
+              hasChartState: chartState !== null
+            });
+
             return {
               settings: newSettings,
               isDirty: true
             };
           });
-          
+
           console.log('Grid state extracted successfully');
         } catch (error) {
           console.error('Error extracting grid state:', error);
         }
       },
-      
+
       applySettingsToGrid: () => {
         const { gridApi, settings } = get();
-        if (!gridApi) return;
-        
+        if (!gridApi) {
+          console.warn('Cannot apply settings: gridApi is not available');
+          return;
+        }
+
         // Check if settings object is complete before proceeding
         if (!settings || !settings.font) {
           console.error('Cannot apply settings: settings or font is undefined');
           return;
         }
-        
+
+        console.log('Applying settings to grid:', {
+          hasColumnsState: !!settings.columnsState,
+          columnsStateLength: settings.columnsState ? settings.columnsState.length : 0,
+          hasFilterState: !!settings.filterState,
+          hasSortState: !!settings.sortState,
+          activeProfileId: get().activeProfileId
+        });
+
         try {
           // Apply visual settings with safety checks
           const fontValue = settings.font.value || defaultFont.value;
           const fontSize = settings.fontSize || defaultFontSize;
           const density = typeof settings.density === 'number' ? settings.density : defaultDensity;
-          
+
           // Debug info
           console.log('Applying visual settings:', {
             font: fontValue,
             fontSize,
             density
           });
-          
+
           // Apply font settings
           document.documentElement.style.setProperty('--ag-font-family', fontValue);
           document.documentElement.style.setProperty('--ag-font-size', `${fontSize}px`);
-          
+
           // Apply density (convert density value to spacing pixels)
           const spacingValue = 4 + (density - 1) * 4;
           document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
@@ -686,135 +918,157 @@ export const useGridStore = create<GridStore>()(
           document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
           document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
           document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
-          
+
           // No cell refresh needed for CSS-only changes
         } catch (error) {
           console.error('Error applying visual settings:', error);
         }
-        
-        try {
-          // Apply column state if available
-          if (settings.columnsState) {
-            if (typeof gridApi.applyColumnState === 'function') {
-              try {
-                gridApi.applyColumnState({
-                  state: settings.columnsState,
-                  applyOrder: true
-                });
-                console.log('Applied column state successfully');
-              } catch (error) {
-                console.warn('Failed to apply column state:', error);
-              }
-            } else {
-              console.warn('Unable to apply column state: applyColumnState not available');
-            }
-          }
-          
-          // Apply filter state if available
-          if (settings.filterState) {
-            if (typeof gridApi.setFilterModel === 'function') {
-              try {
-                gridApi.setFilterModel(settings.filterState);
-                console.log('Applied filter state successfully');
-              } catch (error) {
-                console.warn('Failed to apply filter state:', error);
-              }
-            } else {
-              console.warn('Unable to apply filter state: setFilterModel not available');
-            }
-          }
-          
-          // Apply sort state if available
-          if (settings.sortState) {
-            // Check if setSortModel exists
-            if (typeof gridApi.setSortModel === 'function') {
-              gridApi.setSortModel(settings.sortState);
-            } 
-            // Alternative approach using applyColumnState
-            else if (typeof gridApi.applyColumnState === 'function' && Array.isArray(settings.sortState)) {
-              try {
-                // Transform sort state into column state format
-                const columnSortState = settings.sortState.map(sort => ({
-                  colId: sort.colId,
-                  sort: sort.sort,
-                  sortIndex: sort.sortIndex
-                }));
-                
-                // Only apply sort to columns mentioned in the sort state
-                gridApi.applyColumnState({
-                  state: columnSortState,
-                  defaultState: { sort: null }
-                });
-                
-                console.log('Applied sort state using applyColumnState');
-              } catch (error) {
-                console.warn('Failed to apply column sort state:', error);
-              }
-            } else {
-              console.warn('Unable to apply sort state: No compatible API method available');
-            }
-          }
-          
-          // Apply row group state if available
-          if (settings.rowGroupState) {
-            if (typeof gridApi.setRowGroupColumns === 'function') {
-              try {
-                gridApi.setRowGroupColumns(settings.rowGroupState);
-                console.log('Applied row group state successfully');
-              } catch (error) {
-                console.warn('Failed to apply row group state:', error);
-              }
-            } else {
-              console.warn('Unable to apply row group state: setRowGroupColumns not available');
-            }
-          }
-          
-          // Apply pivot state if available
-          if (settings.pivotState) {
-            if (typeof gridApi.setPivotColumns === 'function') {
-              try {
-                gridApi.setPivotColumns(settings.pivotState);
-                console.log('Applied pivot state successfully');
-              } catch (error) {
-                console.warn('Failed to apply pivot state:', error);
-              }
-            } else {
-              console.warn('Unable to apply pivot state: setPivotColumns not available');
-            }
-          }
-          
-          // Apply chart state if available
-          if (settings.chartState) {
-            if (typeof gridApi.restoreChartModels === 'function') {
-              try {
-                gridApi.restoreChartModels(settings.chartState);
-                console.log('Applied chart state successfully');
-              } catch (error) {
-                console.warn('Failed to apply chart state:', error);
-              }
-            } else {
-              console.warn('Unable to apply chart state: restoreChartModels not available');
-            }
-          }
-          
-          // Ensure grid refreshes after applying all settings
+
+        // Delay applying column state to ensure grid is ready
+        setTimeout(() => {
           try {
-            if (typeof gridApi.refreshCells === 'function') {
-              gridApi.refreshCells({ force: true });
+            // Apply column state if available
+            if (settings.columnsState && Array.isArray(settings.columnsState) && settings.columnsState.length > 0) {
+              if (typeof gridApi.applyColumnState === 'function') {
+                try {
+                  console.log('Applying column state:', settings.columnsState);
+
+                  // Ensure column state is in the correct format
+                  const formattedColumnState = settings.columnsState.map((col: any) => {
+                    // Make sure each column state has a colId
+                    if (!col.colId && col.columnId) {
+                      return { ...col, colId: col.columnId };
+                    }
+                    return col;
+                  });
+
+                  gridApi.applyColumnState({
+                    state: formattedColumnState,
+                    applyOrder: true
+                  });
+                  console.log('Applied column state successfully');
+                } catch (error) {
+                  console.warn('Failed to apply column state:', error);
+                }
+              } else {
+                console.warn('Unable to apply column state: applyColumnState not available');
+              }
+            } else {
+              console.log('No column state to apply or invalid format');
+            }
+
+            // Apply filter state if available
+            if (settings.filterState) {
+              if (typeof gridApi.setFilterModel === 'function') {
+                try {
+                  gridApi.setFilterModel(settings.filterState);
+                  console.log('Applied filter state successfully');
+                } catch (error) {
+                  console.warn('Failed to apply filter state:', error);
+                }
+              } else {
+                console.warn('Unable to apply filter state: setFilterModel not available');
+              }
+            }
+
+            // Apply sort state if available
+            if (settings.sortState && Array.isArray(settings.sortState) && settings.sortState.length > 0) {
+              // Check if setSortModel exists
+              if (typeof gridApi.setSortModel === 'function') {
+                try {
+                  console.log('Applying sort state:', settings.sortState);
+                  gridApi.setSortModel(settings.sortState);
+                  console.log('Applied sort state successfully');
+                } catch (error) {
+                  console.warn('Failed to apply sort state:', error);
+                }
+              }
+              // Alternative approach using applyColumnState
+              else if (typeof gridApi.applyColumnState === 'function') {
+                try {
+                  // Transform sort state into column state format
+                  const columnSortState = settings.sortState.map((sort: any) => ({
+                    colId: sort.colId || sort.columnId,
+                    sort: sort.sort,
+                    sortIndex: sort.sortIndex
+                  }));
+
+                  // Only apply sort to columns mentioned in the sort state
+                  gridApi.applyColumnState({
+                    state: columnSortState,
+                    defaultState: { sort: null }
+                  });
+
+                  console.log('Applied sort state using applyColumnState');
+                } catch (error) {
+                  console.warn('Failed to apply column sort state:', error);
+                }
+              } else {
+                console.warn('Unable to apply sort state: No compatible API method available');
+              }
+            }
+
+            // Apply row group state if available
+            if (settings.rowGroupState) {
+              if (typeof gridApi.setRowGroupColumns === 'function') {
+                try {
+                  gridApi.setRowGroupColumns(settings.rowGroupState);
+                  console.log('Applied row group state successfully');
+                } catch (error) {
+                  console.warn('Failed to apply row group state:', error);
+                }
+              } else {
+                console.warn('Unable to apply row group state: setRowGroupColumns not available');
+              }
+            }
+
+            // Apply pivot state if available
+            if (settings.pivotState) {
+              if (typeof gridApi.setPivotColumns === 'function') {
+                try {
+                  gridApi.setPivotColumns(settings.pivotState);
+                  console.log('Applied pivot state successfully');
+                } catch (error) {
+                  console.warn('Failed to apply pivot state:', error);
+                }
+              } else {
+                console.warn('Unable to apply pivot state: setPivotColumns not available');
+              }
+            }
+
+            // Apply chart state if available
+            if (settings.chartState) {
+              if (typeof gridApi.restoreChartModels === 'function') {
+                try {
+                  gridApi.restoreChartModels(settings.chartState);
+                  console.log('Applied chart state successfully');
+                } catch (error) {
+                  console.warn('Failed to apply chart state:', error);
+                }
+              } else {
+                console.warn('Unable to apply chart state: restoreChartModels not available');
+              }
+            }
+
+            // Ensure grid refreshes after applying all settings
+            try {
+              if (typeof gridApi.refreshCells === 'function') {
+                gridApi.refreshCells({ force: true });
+              }
+            } catch (error) {
+              console.warn('Failed to refresh cells:', error);
             }
           } catch (error) {
-            console.warn('Failed to refresh cells:', error);
+            console.error('Error applying settings to grid:', error);
           }
-        } catch (error) {
-          console.error('Error applying settings to grid:', error);
-        }
+        }, 100); // Add a small delay to ensure grid is ready
       },
-      
+
       // Reset settings to match active profile
       resetSettingsToProfile: () => {
         const { profiles, activeProfileId } = get();
         const activeProfile = profiles.find(p => p.id === activeProfileId) || defaultProfile;
-        
+
         set({
           settings: {
             font: activeProfile.font,
@@ -832,13 +1086,13 @@ export const useGridStore = create<GridStore>()(
           },
           isDirty: false
         });
-        
+
         // Apply settings to grid if API exists
         if (get().gridApi) {
           setTimeout(() => get().applySettingsToGrid(), 0);
         }
       },
-      
+
       // Update theme mode
       setThemeMode: (mode) => {
         set(state => ({
@@ -849,7 +1103,7 @@ export const useGridStore = create<GridStore>()(
           isDirty: true
         }));
       },
-      
+
       // Dialog settings updates
       updateExpressionEditorState: (state) => {
         set(prevState => ({
@@ -860,7 +1114,7 @@ export const useGridStore = create<GridStore>()(
           isDirty: true
         }));
       },
-      
+
       updateColumnSettingsState: (state) => {
         set(prevState => ({
           settings: {
@@ -870,24 +1124,45 @@ export const useGridStore = create<GridStore>()(
           isDirty: true
         }));
       },
-      
+
       // Utility functions for getting grid state
       getGridColumnState: () => {
         const { gridApi } = get();
         if (!gridApi) return null;
-        
+
         try {
-          return gridApi.getColumnState();
+          // Get column state directly from the grid API
+          const columnState = gridApi.getColumnState();
+          console.log('Retrieved raw column state from API:', columnState);
+
+          // Make a deep copy to avoid any reference issues
+          const columnStateCopy = JSON.parse(JSON.stringify(columnState));
+
+          // Ensure each column has a colId property (AG-Grid expects colId, not columnId)
+          if (Array.isArray(columnStateCopy)) {
+            const formattedState = columnStateCopy.map(col => {
+              // If the column has columnId but not colId, add colId
+              if (!col.colId && col.columnId) {
+                return { ...col, colId: col.columnId };
+              }
+              return col;
+            });
+
+            console.log('Formatted column state to return:', formattedState);
+            return formattedState;
+          }
+
+          return columnStateCopy;
         } catch (error) {
           console.error('Failed to get column state:', error);
           return null;
         }
       },
-      
+
       getGridFilterState: () => {
         const { gridApi } = get();
         if (!gridApi) return null;
-        
+
         try {
           return gridApi.getFilterModel();
         } catch (error) {
@@ -895,11 +1170,11 @@ export const useGridStore = create<GridStore>()(
           return null;
         }
       },
-      
+
       getGridSortState: () => {
         const { gridApi } = get();
         if (!gridApi) return null;
-        
+
         try {
           // Check if getSortModel exists, otherwise try getColumnState for sort info
           if (typeof gridApi.getSortModel === 'function') {
@@ -908,10 +1183,12 @@ export const useGridStore = create<GridStore>()(
             // Extract sort info from column state
             const columnState = gridApi.getColumnState();
             // Filter to only columns that have sort info
-            return columnState.filter(col => col.sort).map(col => ({
-              colId: col.colId,
-              sort: col.sort
-            }));
+            return columnState
+              .filter((col: any) => col.sort)
+              .map((col: any) => ({
+                colId: col.colId,
+                sort: col.sort
+              }));
           }
           return null;
         } catch (error) {
@@ -919,45 +1196,47 @@ export const useGridStore = create<GridStore>()(
           return null;
         }
       },
-      
+
       getGridRowGroupState: () => {
         const { gridApi } = get();
         if (!gridApi) return null;
-        
+
         try {
           return gridApi.getRowGroupColumns?.() || null;
-        } catch (error) {
+        } catch (_) {
+          // Silently fail and return null
           return null;
         }
       },
-      
+
       getGridPivotState: () => {
         const { gridApi } = get();
         if (!gridApi) return null;
-        
+
         try {
           return gridApi.getPivotColumns?.() || null;
-        } catch (error) {
+        } catch (_) {
+          // Silently fail and return null
           return null;
         }
       },
-      
+
       getGridChartState: () => {
         const { gridApi } = get();
         if (!gridApi) return null;
-        
+
         try {
           // First check if the Charts module is registered
           // AG Grid throws a specific error if getChartModels is called without Charts module
           // We'll check if the method exists AND if the IntegratedChartsModule is registered
-          if (typeof gridApi.getChartModels === 'function' && 
+          if (typeof gridApi.getChartModels === 'function' &&
               // We can't directly check module registration, so we'll try to use a safer approach
               gridApi._modulesManager?.isRegistered?.('integratedCharts')) {
             return gridApi.getChartModels();
           }
           // If we get here, either the method doesn't exist or Charts module isn't registered
           return null;
-        } catch (error) {
+        } catch (_) {
           // Catch and silence the error about missing Charts module
           return null;
         }
@@ -968,7 +1247,9 @@ export const useGridStore = create<GridStore>()(
       name: 'grid-store',
       partialize: (state) => ({
         profiles: state.profiles,
-        activeProfileId: state.activeProfileId
+        activeProfileId: state.activeProfileId,
+        settings: state.settings,
+        isDirty: state.isDirty
       })
     }
   )
