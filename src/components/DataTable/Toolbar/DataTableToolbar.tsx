@@ -59,8 +59,6 @@ import {
   Sun,
   Laptop,
 
-  Columns,
-  Code,
   User,
   UserPlus,
   Trash2,
@@ -71,25 +69,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGridStore } from '@/store/gridStore';
+import { monospacefonts } from '@/lib/fonts';
 
-// List of available monospace fonts
-export const monospacefonts = [
-  { name: 'JetBrains Mono', value: "'JetBrains Mono', monospace" },
-  { name: 'Fira Code', value: "'Fira Code', monospace" },
-  { name: 'Source Code Pro', value: "'Source Code Pro', monospace" },
-  { name: 'IBM Plex Mono', value: "'IBM Plex Mono', monospace" },
-  { name: 'Roboto Mono', value: "'Roboto Mono', monospace" },
-];
-
-interface DataTableToolbarProps {
-  onOpenExpressionEditor: () => void;
-  onOpenColumnSettings: () => void;
-}
-
-export function DataTableToolbar({
-  onOpenExpressionEditor,
-  onOpenColumnSettings,
-}: DataTableToolbarProps) {
+export function DataTableToolbar() {
   const { setTheme } = useTheme();
   const [fontOpen, setFontOpen] = useState(false);
   const [profilesOpen, setProfilesOpen] = useState(false);
@@ -409,25 +391,9 @@ export function DataTableToolbar({
 
         <div className="border-l h-8 mx-1"></div>
 
-        {/* Expression Editor Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onOpenExpressionEditor}
-          title="Expression Editor"
-        >
-          <Code className="h-4 w-4" />
-        </Button>
 
-        {/* Column Settings Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onOpenColumnSettings}
-          title="Column Settings"
-        >
-          <Columns className="h-4 w-4" />
-        </Button>
+
+
 
         {/* Density Controls */}
         <DropdownMenu>

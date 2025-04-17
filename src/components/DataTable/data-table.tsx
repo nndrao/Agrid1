@@ -3,11 +3,12 @@ import { useTheme } from 'next-themes';
 import { ModuleRegistry } from 'ag-grid-community';
 import { AllEnterpriseModule } from 'ag-grid-enterprise';
 import { AgGridReact } from 'ag-grid-react';
+import { GridReadyEvent } from 'ag-grid-community';
 import { DataTableToolbar } from './Toolbar/DataTableToolbar';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
-import { ExpressionEditorDialog } from './ExpressionEditor/ExpressionEditorDialog';
-import { ColumnSettingsDialog } from './ColumnSettings/ColumnSettingsDialog';
+
+
 import { useGridStore } from '@/store/gridStore';
 
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -26,9 +27,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     gridApi,
     setGridApi,
     initializeStore,
-    applySettingsToGrid,
-    extractGridState,
-    getActiveProfile
+    applySettingsToGrid
   } = useGridStore();
 
   // Local state
@@ -39,8 +38,8 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   const [gridTheme, setGridTheme] = useState(() =>
     createGridTheme(settings?.font?.value || defaultFontValue)
   );
-  const [expressionEditorOpen, setExpressionEditorOpen] = useState(false);
-  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
+
+
   const gridRef = useRef<AgGridReact>(null);
 
   // Column definitions
@@ -101,7 +100,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     }
   };
 
-  const onGridReady = useCallback((params: any) => {
+  const onGridReady = useCallback((params: GridReadyEvent) => {
     if (!params || !params.api) {
       console.warn('Grid API not available in onGridReady');
       return;
@@ -118,8 +117,8 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
 
       // Set initial focus to first cell
       setTimeout(() => {
-        if (params.api && params.columnApi) {
-          const columns = params.columnApi.getAllDisplayedColumns();
+        if (params.api) {
+          const columns = params.api.getColumns();
           if (columns && columns.length > 0) {
             params.api.setFocusedCell(0, columns[0].getColId());
           }
@@ -130,35 +129,15 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     }
   }, [setGridApi, applySettingsToGrid]);
 
-  const handleExpressionSave = useCallback((expression: any) => {
-    // TODO: Handle saving the expression
-    console.log('Expression saved:', expression);
-    setExpressionEditorOpen(false);
-  }, []);
 
-  // Save grid state before closing or when requested
-  const saveGridState = useCallback(() => {
-    if (gridRef.current && gridRef.current.api) {
-      extractGridState();
-    }
-  }, [extractGridState]);
 
-  const handleColumnSettingsApply = useCallback((updatedColumns: any[]) => {
-    // Update the column definitions in the grid
-    if (gridRef.current && gridRef.current.api) {
-      gridRef.current.api.setGridOption('columnDefs', updatedColumns);
 
-      // Extract updated grid state after changes
-      saveGridState();
-    }
-  }, [saveGridState]);
+
+
 
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">
-      <DataTableToolbar
-        onOpenExpressionEditor={() => setExpressionEditorOpen(true)}
-        onOpenColumnSettings={() => setColumnSettingsOpen(true)}
-      />
+      <DataTableToolbar />
 
       {/* AG Grid */}
       <div className="ag-theme-quartz flex-1">
@@ -173,33 +152,15 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
           domLayout="normal"
           className="h-full w-full"
           onGridReady={onGridReady}
-          cellSelection={{
-            enabled: true,
-            handle: {
-              enabled: true,
-              suppressClearOnFillReduction: true
-            }
-          }}
+          enableCellTextSelection={true}
           enterNavigatesVertically={false}
           stopEditingWhenCellsLoseFocus={false}
         />
       </div>
 
-      {/* Expression Editor Dialog */}
-      <ExpressionEditorDialog
-        open={expressionEditorOpen}
-        onClose={() => setExpressionEditorOpen(false)}
-        onSave={handleExpressionSave}
-        columnDefs={columnDefs}
-      />
 
-      {/* Column Settings Dialog */}
-      <ColumnSettingsDialog
-        open={columnSettingsOpen}
-        onClose={() => setColumnSettingsOpen(false)}
-        columns={columnDefs}
-        onApply={handleColumnSettingsApply}
-      />
+
+
     </div>
   );
 }

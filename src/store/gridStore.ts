@@ -49,9 +49,7 @@ export interface GridProfile {
     options?: Record<string, unknown>;
   };
 
-  // Dialog settings
-  expressionEditorState?: any;
-  columnSettingsState?: any;
+
 
   // Theme
   themeMode?: 'light' | 'dark' | 'system';
@@ -78,9 +76,7 @@ interface GridSettings {
   pivotState: any;
   chartState: any;
 
-  // Dialog settings
-  expressionEditorState: any;
-  columnSettingsState: any;
+
 
   // Theme
   themeMode: 'light' | 'dark' | 'system';
@@ -99,14 +95,14 @@ const defaultProfile: GridProfile = {
   fontSize: defaultFontSize,
   density: defaultDensity,
   isDefault: true,
-  columnsState: null,
-  filterState: null,
-  sortState: null,
-  rowGroupState: null,
-  pivotState: null,
-  chartState: null,
-  expressionEditorState: null,
-  columnSettingsState: null,
+  columnsState: [],
+  filterState: [],
+  sortState: [],
+  rowGroupState: [],
+  pivotState: { pivotColumns: [], valueColumns: [] },
+  chartState: { chartType: 'bar' },
+
+
   themeMode: 'system',
   createdAt: Date.now(),
   updatedAt: Date.now()
@@ -148,8 +144,8 @@ interface GridStore {
   setThemeMode: (mode: 'light' | 'dark' | 'system') => void;
 
   // Dialog settings
-  updateExpressionEditorState: (state: any) => void;
-  updateColumnSettingsState: (state: any) => void;
+
+
 
   // Utility functions
   getGridColumnState: () => any;
@@ -180,7 +176,7 @@ export const useGridStore = create<GridStore>()(
         rowGroupState: null,
         pivotState: null,
         chartState: null,
-        expressionEditorState: null,
+
         columnSettingsState: null,
         themeMode: 'system'
       },
@@ -214,8 +210,8 @@ export const useGridStore = create<GridStore>()(
             rowGroupState: activeProfile.rowGroupState || null,
             pivotState: activeProfile.pivotState || null,
             chartState: activeProfile.chartState || null,
-            expressionEditorState: activeProfile.expressionEditorState || null,
-            columnSettingsState: activeProfile.columnSettingsState || null,
+
+
             themeMode: activeProfile.themeMode || 'system'
           },
           isDirty: false
@@ -290,8 +286,8 @@ export const useGridStore = create<GridStore>()(
                 rowGroupState: defaultProfileItem.rowGroupState || null,
                 pivotState: defaultProfileItem.pivotState || null,
                 chartState: defaultProfileItem.chartState || null,
-                expressionEditorState: defaultProfileItem.expressionEditorState || null,
-                columnSettingsState: defaultProfileItem.columnSettingsState || null,
+
+
                 themeMode: defaultProfileItem.themeMode || 'system'
               },
               isDirty: false
@@ -338,8 +334,8 @@ export const useGridStore = create<GridStore>()(
               rowGroupState: safeProfile.rowGroupState || null,
               pivotState: safeProfile.pivotState || null,
               chartState: safeProfile.chartState || null,
-              expressionEditorState: safeProfile.expressionEditorState || null,
-              columnSettingsState: safeProfile.columnSettingsState || null,
+
+
               themeMode: safeProfile.themeMode
             },
             isDirty: false
@@ -528,8 +524,8 @@ export const useGridStore = create<GridStore>()(
           rowGroupState: profileToExport.rowGroupState,
           pivotState: profileToExport.pivotState,
           chartState: profileToExport.chartState,
-          expressionEditorState: profileToExport.expressionEditorState,
-          columnSettingsState: profileToExport.columnSettingsState,
+
+
           themeMode: profileToExport.themeMode,
           exportedAt: Date.now()
         };
@@ -569,8 +565,8 @@ export const useGridStore = create<GridStore>()(
             chartState: importedData.chartState || null,
 
             // Dialog settings
-            expressionEditorState: importedData.expressionEditorState || null,
-            columnSettingsState: importedData.columnSettingsState || null,
+
+
 
             // Theme
             themeMode: importedData.themeMode || 'system',
@@ -739,8 +735,8 @@ export const useGridStore = create<GridStore>()(
                       rowGroupState: updatedSettings.rowGroupState,
                       pivotState: updatedSettings.pivotState,
                       chartState: updatedSettings.chartState,
-                      expressionEditorState: updatedSettings.expressionEditorState,
-                      columnSettingsState: updatedSettings.columnSettingsState,
+
+
                       themeMode: updatedSettings.themeMode,
                       updatedAt: Date.now()
                     }
@@ -1062,8 +1058,8 @@ export const useGridStore = create<GridStore>()(
             rowGroupState: activeProfile.rowGroupState || null,
             pivotState: activeProfile.pivotState || null,
             chartState: activeProfile.chartState || null,
-            expressionEditorState: activeProfile.expressionEditorState || null,
-            columnSettingsState: activeProfile.columnSettingsState || null,
+
+
             themeMode: activeProfile.themeMode || 'system'
           },
           isDirty: false
@@ -1087,25 +1083,8 @@ export const useGridStore = create<GridStore>()(
       },
 
       // Dialog settings updates
-      updateExpressionEditorState: (state) => {
-        set(prevState => ({
-          settings: {
-            ...prevState.settings,
-            expressionEditorState: state
-          },
-          isDirty: true
-        }));
-      },
 
-      updateColumnSettingsState: (state) => {
-        set(prevState => ({
-          settings: {
-            ...prevState.settings,
-            columnSettingsState: state
-          },
-          isDirty: true
-        }));
-      },
+
 
       // Utility functions for getting grid state
       getGridColumnState: () => {
@@ -1185,7 +1164,7 @@ export const useGridStore = create<GridStore>()(
 
         try {
           return gridApi.getRowGroupColumns?.() || null;
-        } catch (_) {
+        } catch {
           // Silently fail and return null
           return null;
         }
@@ -1197,7 +1176,7 @@ export const useGridStore = create<GridStore>()(
 
         try {
           return gridApi.getPivotColumns?.() || null;
-        } catch (_) {
+        } catch {
           // Silently fail and return null
           return null;
         }
@@ -1218,7 +1197,7 @@ export const useGridStore = create<GridStore>()(
           }
           // If we get here, either the method doesn't exist or Charts module isn't registered
           return null;
-        } catch (_) {
+        } catch {
           // Catch and silence the error about missing Charts module
           return null;
         }
