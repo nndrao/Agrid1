@@ -33,19 +33,18 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
   selectedColumn,
   onSelectColumn
 }) => {
-  const {
-    state,
-    updateGeneral,
-    updateHeader,
-    updateCell,
-    resetForColumn
+  const { 
+    state, 
+    updateGeneral, 
+    updateHeader, 
+    updateCell, 
+    resetForColumn 
   } = useColumnSettings(selectedColumn);
 
   // Update state when selected column changes
   useEffect(() => {
-    // This effect runs only once when the component mounts
-    // The initial column is already set in the useColumnSettings hook
-  }, []);
+    resetForColumn(selectedColumn);
+  }, [selectedColumn, resetForColumn]);
 
   // Handle form submission
   const handleApplyChanges = () => {
@@ -72,19 +71,15 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
           </DialogTitle>
           <div className="text-[13px] text-muted-foreground mt-1">Configure display and behavior for this column</div>
         </DialogHeader>
-
+        
         <div className="flex flex-row min-h-0 flex-1">
           {/* Sidebar */}
-          <ColumnList
+          <ColumnList 
             columns={columnList}
             selectedColumn={selectedColumn}
-            onSelectColumn={(column) => {
-              // Update the selected column in the parent component
-              onSelectColumn(column);
-              // Update the column name in our local state
-              resetForColumn(column);
-            }}
+            onSelectColumn={onSelectColumn}
           />
+          
           {/* Main Content */}
           <div className="flex-1 pl-6 overflow-y-hidden" style={{ maxHeight: 740 }}>
             <Tabs defaultValue="general" className="w-full">
@@ -96,68 +91,64 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
                 <TabsTrigger value="formatters" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Formatters</TabsTrigger>
                 <TabsTrigger value="editors" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Editors</TabsTrigger>
               </TabsList>
-
+              
               {/* Tab Contents */}
               <TabsContent value="general" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
-                <GeneralTab
+                <GeneralTab 
                   settings={state.general}
                   onUpdate={updateGeneral}
                 />
               </TabsContent>
-
+              
               <TabsContent value="header" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
-                <HeaderTab
+                <HeaderTab 
                   settings={state.header}
                   onUpdate={updateHeader}
                 />
               </TabsContent>
-
+              
               <TabsContent value="cell" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
-                <CellTab
+                <CellTab 
                   settings={state.cell}
                   onUpdate={updateCell}
                 />
               </TabsContent>
-
+              
               <TabsContent value="filter" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
                 <FilterTab />
               </TabsContent>
-
+              
               <TabsContent value="formatters" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
                 <FormattersTab />
               </TabsContent>
-
+              
               <TabsContent value="editors" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
                 <EditorsTab />
               </TabsContent>
-              {/* End of Tab Contents */}
-
-
-
-
             </Tabs>
           </div>
         </div>
+        
         {/* Footer: match Expression Editor dialog */}
         <div className="flex justify-between border-t border-border/80" style={{ minHeight: '48px', display: 'flex', alignItems: 'center', padding: '10px 16px' }}>
-          <Button
-            variant="outline"
-            className="h-8 px-5 text-[13px] border border-border/80 bg-card text-foreground hover:bg-accent hover:text-foreground"
+          <Button 
+            variant="outline" 
+            className="h-8 px-5 text-[13px] border border-border/80 bg-card text-foreground hover:bg-accent hover:text-foreground" 
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
+            <Button 
+              variant="outline" 
               className="h-8 px-5 text-[13px] border border-border/80 bg-card text-foreground hover:bg-accent hover:text-foreground"
               onClick={handleReset}
             >
               Reset
             </Button>
-            <Button
-              type="submit"
-              className="h-8 px-5 text-[13px] bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+            <Button 
+              type="submit" 
+              className="h-8 px-5 text-[13px] bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" 
               onClick={handleApplyChanges}
             >
               Apply Changes
@@ -165,7 +156,6 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
           </div>
         </div>
       </DialogContent>
-
     </Dialog>
   );
 };
