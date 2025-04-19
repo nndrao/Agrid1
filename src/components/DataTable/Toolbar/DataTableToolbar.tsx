@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTheme } from 'next-themes';
+import { ExpressionEditor } from '@/components/ExpressionEditor/ExpressionEditor';
+import { ColumnSettingsDialog } from '@/components/ColumnSettings/ColumnSettingsDialog';
 
 // Default values for fallbacks
 const defaultDensity = 2;
@@ -76,6 +78,12 @@ export function DataTableToolbar() {
   const [fontOpen, setFontOpen] = useState(false);
   const [profilesOpen, setProfilesOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [expressionEditorOpen, setExpressionEditorOpen] = useState(false);
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
+  const [selectedColumn, setSelectedColumn] = useState('PositionId');
+  const columnList = [
+    'PositionId', 'Cusip', 'Isin', 'Issuer', 'Currency', 'Sector', 'Rating', 'MaturityDate', 'Coupon', 'Position', 'MarketValue', 'Price', 'YieldToMaturity', 'ModifiedDuration', 'Convexity', 'SpreadDuration', 'ZSpread', 'OaSpread'
+  ];
 
   // Get store data and actions
   const {
@@ -243,6 +251,7 @@ export function DataTableToolbar() {
 
   return (
     <div className="flex h-[60px] items-center justify-between border-b bg-gray-50/50 px-4 dark:bg-gray-800/50">
+      <ExpressionEditor open={expressionEditorOpen} onOpenChange={setExpressionEditorOpen} />
       <div className="flex items-center space-x-2">
         {/* Profile Section */}
         <div className="flex items-center space-x-2">
@@ -537,44 +546,7 @@ export function DataTableToolbar() {
                 />
               </label>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              try {
-                const activeProfile = getActiveProfile();
-
-                if (!activeProfile) {
-                  console.error('No active profile found for export');
-                  return;
-                }
-
-                const profileJson = exportProfile(activeProfile.id);
-
-                if (!profileJson) {
-                  console.error('Failed to export profile: Empty data');
-                  return;
-                }
-
-                // Create and trigger download
-                const blob = new Blob([profileJson], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-
-                // Ensure the filename is valid
-                const filename = activeProfile.name
-                  ? `${activeProfile.name.replace(/\s+/g, '_')}_profile.json`
-                  : 'grid_profile.json';
-
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-
-                // Cleanup
-                URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-              } catch (error) {
-                console.error('Error exporting profile:', error);
-              }
-            }}>
+            <DropdownMenuItem>
               <FileOutput className="mr-2 h-4 w-4" />
               <span>Export Settings</span>
             </DropdownMenuItem>
@@ -609,6 +581,12 @@ export function DataTableToolbar() {
               <Keyboard className="mr-2 h-4 w-4" />
               <span>Keyboard Shortcuts</span>
               <DropdownMenuShortcut>⌘K</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setExpressionEditorOpen(true)}>
+              <span>Expression Editor</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setColumnSettingsOpen(true)}>
+              Column Settings
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
@@ -703,6 +681,14 @@ export function DataTableToolbar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ColumnSettingsDialog
+        open={columnSettingsOpen}
+        onOpenChange={setColumnSettingsOpen}
+        columnList={columnList}
+        selectedColumn={selectedColumn}
+        onSelectColumn={setSelectedColumn}
+      />
     </div>
   );
 }

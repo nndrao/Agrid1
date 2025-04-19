@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>shadcn/ui Theme Colors</title>
+  <style>
+    body { font-family: sans-serif; padding: 2em; }
+    .swatch-row { display: flex; gap: 2em; margin-bottom: 1em; }
+    .swatch {
+      display: flex; align-items: center; gap: 1em;
+      padding: 0.5em 1em; border-radius: 6px; font-size: 1em;
+      border: 1px solid #ccc; min-width: 240px;
+    }
+    .label { width: 90px; }
+    .hex { font-family: monospace; }
+    .light { background: #fff; color: #222; }
+    .dark { background: #18181b; color: #eee; }
+    .bg-accent-light { background: #f4f4f5; color: #18181b; }
+    .bg-accent-dark { background: #27272a; color: #f4f4f5; }
+    .bg-muted-light { background: #f4f4f5; color: #71717a; }
+    .bg-muted-dark { background: #18181b; color: #a1a1aa; }
+  </style>
+</head>
+<body>
+  <h2>shadcn/ui Theme Colors (Default)</h2>
+  <h3>Light Mode</h3>
+  <div class="swatch-row">
+    <div class="swatch bg-accent-light">
+      <span class="label">Highlight</span>
+      <span class="hex">#f4f4f5 / #18181b</span>
+    </div>
+    <div class="swatch bg-muted-light">
+      <span class="label">Muted</span>
+      <span class="hex">#f4f4f5 / #71717a</span>
+    </div>
+  </div>
+  <h3>Dark Mode</h3>
+  <div class="swatch-row">
+    <div class="swatch bg-accent-dark">
+      <span class="label">Highlight</span>
+      <span class="hex">#27272a / #f4f4f5</span>
+    </div>
+    <div class="swatch bg-muted-dark">
+      <span class="label">Muted</span>
+      <span class="hex">#18181b / #a1a1aa</span>
+    </div>
+  </div>
+</body>
+</html>
