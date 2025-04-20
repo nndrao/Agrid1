@@ -7,10 +7,12 @@ import { GridReadyEvent } from 'ag-grid-community';
 import { DataTableToolbar } from './Toolbar/DataTableToolbar';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
+import { useApplyColumnProfiles } from '../ColumnSettings/useApplyColumnProfiles';
 
 
 import { useGridStore } from '@/store/gridStore';
 
+// Register AG Grid Enterprise modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
 
 interface DataTableProps<TData> {
@@ -62,34 +64,45 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   // We exclude fontSize and density as they're handled via CSS directly
   const { font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState } = settings || {};
 
+  // Use the column profiles hook to apply saved column settings
+  const { applyAllProfiles } = useApplyColumnProfiles(gridApi);
+
   useEffect(() => {
     if (gridApi) {
       // Only apply settings when properties that require grid refresh change
       // This prevents unnecessary refreshes when saving profiles or changing fontSize/density
       console.log('Applying settings due to grid-related property change');
       applySettingsToGrid();
+
+      // Apply all saved column profiles
+      setTimeout(() => {
+        applyAllProfiles();
+      }, 500);
     }
   }, [
     font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState,
-    gridApi, applySettingsToGrid
+    gridApi, applySettingsToGrid, applyAllProfiles
   ]);
 
   function setDarkMode(enabled: boolean) {
     document.body.dataset.agThemeMode = enabled ? 'dark' : 'light';
   }
 
-  const defaultColDef = {
+  // Define default column properties - AG Grid 33+ syntax
+  const defaultColDef = useMemo(() => ({
     flex: 1,
     minWidth: 100,
     filter: true,
+    sortable: true,
+    resizable: true,
     enableValue: true,
     enableRowGroup: true,
     enablePivot: true,
     editable: true,
-  };
+  }), []);
 
-  // Define column types for the grid
-  const columnTypes = {
+  // Define column types for the grid - AG Grid 33+ syntax
+  const columnTypes = useMemo(() => ({
     customNumeric: {
       filter: 'agNumberColumnFilter',
       headerClass: 'ag-right-aligned-header',
@@ -98,8 +111,9 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     customDate: {
       filter: 'agDateColumnFilter',
     }
-  };
+  }), []);
 
+  // Handle grid ready event - AG Grid 33+ approach
   const onGridReady = useCallback((params: GridReadyEvent) => {
     if (!params || !params.api) {
       console.warn('Grid API not available in onGridReady');
@@ -113,6 +127,9 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       // Apply current settings to grid
       setTimeout(() => {
         applySettingsToGrid();
+
+        // Apply all saved column profiles
+        applyAllProfiles();
       }, 0);
 
       // Set initial focus to first cell
@@ -127,13 +144,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     } catch (error) {
       console.error('Error in onGridReady:', error);
     }
-  }, [setGridApi, applySettingsToGrid]);
-
-
-
-
-
-
+  }, [setGridApi, applySettingsToGrid, applyAllProfiles]);
 
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">
@@ -144,23 +155,29 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         <AgGridReact
           ref={gridRef}
           theme={gridTheme}
-          columnDefs={columnDefs}
+          // Basic grid configuration - AG Grid 33+ syntax
           rowData={data}
+          columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           columnTypes={columnTypes}
-          sideBar={true}
+          // Layout and appearance
           domLayout="normal"
           className="h-full w-full"
+          // Enable enterprise features
+          sideBar={true}
+          // Event handling
           onGridReady={onGridReady}
+          // Editing and selection options
           enableCellTextSelection={true}
-          enterNavigatesVertically={false}
           stopEditingWhenCellsLoseFocus={false}
+          // Navigation
+          enterNavigatesVertically={false}
+          // Animation
+          animateRows={true}
+          // Provide IDs for rows if data has id field
+          getRowId={(params) => params.data.id || params.data.positionId || String(Math.random())}
         />
       </div>
-
-
-
-
     </div>
   );
 }

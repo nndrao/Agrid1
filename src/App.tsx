@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { DataTable } from "@/components/DataTable/data-table";
+import { Toaster } from "@/components/ui/toaster";
 import { useMemo } from "react";
 
 // Generate realistic fixed income position data
@@ -132,6 +133,7 @@ function App() {
           </main>
           <Footer />
         </div>
+        <Toaster />
       </TooltipProvider>
     </ThemeProvider>
   );

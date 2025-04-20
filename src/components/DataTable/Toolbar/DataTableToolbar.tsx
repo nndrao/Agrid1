@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { ExpressionEditor } from '@/components/ExpressionEditor/ExpressionEditor';
 import { ColumnSettingsDialog } from '@/components/ColumnSettings/ColumnSettingsDialog';
+import { Column } from 'ag-grid-community';
 
 // Default values for fallbacks
 const defaultDensity = 2;
@@ -80,16 +81,14 @@ export function DataTableToolbar() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [expressionEditorOpen, setExpressionEditorOpen] = useState(false);
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
-  const [selectedColumn, setSelectedColumn] = useState('PositionId');
-  const columnList = [
-    'PositionId', 'Cusip', 'Isin', 'Issuer', 'Currency', 'Sector', 'Rating', 'MaturityDate', 'Coupon', 'Position', 'MarketValue', 'Price', 'YieldToMaturity', 'ModifiedDuration', 'Convexity', 'SpreadDuration', 'ZSpread', 'OaSpread'
-  ];
+  const [selectedColumn, setSelectedColumn] = useState('');
+  const [columnList, setColumnList] = useState<string[]>([]);
 
   // Get store data and actions
   const {
     profiles,
     settings,
-
+    gridApi,
     createProfile,
     updateProfile,
     deleteProfile,
@@ -97,9 +96,31 @@ export function DataTableToolbar() {
     updateSettings,
     saveSettingsToProfile,
     getActiveProfile,
-    exportProfile,
     importProfile
   } = useGridStore();
+
+  // Initialize column list when the grid API is available
+  useEffect(() => {
+    if (gridApi) {
+      try {
+        // Get all columns from grid API
+        const columns = gridApi.getAllDisplayedColumns();
+        if (columns && columns.length > 0) {
+          // Extract column fields
+          const fields = columns.map((col: Column) => col.getColId());
+          setColumnList(fields);
+          
+          // Set first column as selected if we don't have one already
+          if (!selectedColumn || !fields.includes(selectedColumn)) {
+            setSelectedColumn(fields[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error getting columns from grid API:', error);
+      }
+    }
+  // Only depend on gridApi changes, not on selectedColumn changes
+  }, [gridApi, selectedColumn ? '' : 'initialize']);
 
   // Current active profile
   const activeProfile = getActiveProfile();
@@ -208,19 +229,19 @@ export function DataTableToolbar() {
   }, [settings?.fontSize, settings?.density]);
 
   // Update a single setting with debounce
-  const handleUpdateSetting = useCallback((key: string, value: any) => {
+  const handleUpdateSetting = useCallback((key: string, value: string | number | boolean | { name: string; value: string }) => {
     // Update local state for immediate UI feedback
     if (key === 'fontSize') {
-      setLocalFontSize(value);
+      setLocalFontSize(value as number);
     } else if (key === 'density') {
-      setLocalDensity(value);
+      setLocalDensity(value as number);
     }
 
     // For CSS-only properties, apply changes immediately to DOM
     if (key === 'fontSize') {
       document.documentElement.style.setProperty('--ag-font-size', `${value}px`);
     } else if (key === 'density') {
-      const spacingValue = 4 + (value - 1) * 4;
+      const spacingValue = 4 + ((value as number) - 1) * 4;
       // Apply density (convert density value to spacing pixels)
       document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
       document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
