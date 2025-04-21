@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,10 @@ import { CellTab } from './tabs/CellTab';
 import { FilterTab } from './tabs/FilterTab';
 import { FormattersTab } from './tabs/FormattersTab';
 import { EditorsTab } from './tabs/EditorsTab';
-import { useColumnSettings } from './useColumnSettings';
+
+// Import grid store instead of local state management
+import { useGridStore } from '@/store/gridStore';
+import { ColumnSettingsState } from './useColumnSettings';
 
 interface ColumnSettingsDialogProps {
   open: boolean;
@@ -33,30 +36,192 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
   selectedColumn,
   onSelectColumn
 }) => {
-  const { 
-    state, 
-    updateGeneral, 
-    updateHeader, 
-    updateCell, 
-    resetForColumn 
-  } = useColumnSettings(selectedColumn);
+  // Use grid store for state management instead of local hook
+  const gridStore = useGridStore();
+  
+  // Local state to use while editing
+  const [state, setState] = useState<ColumnSettingsState | null>(null);
 
-  // Update state when selected column changes
+  // Load column settings from grid store when dialog opens or column changes
   useEffect(() => {
-    resetForColumn(selectedColumn);
-  }, [selectedColumn, resetForColumn]);
+    if (open && selectedColumn) {
+      // Get column settings from store
+      const settings = gridStore.getColumnSettings(selectedColumn);
+      
+      if (settings) {
+        console.log(`Loaded settings for column ${selectedColumn} from grid store`);
+        setState(settings);
+      } else {
+        // If no settings, create default state
+        console.log(`No settings found for column ${selectedColumn}, using defaults`);
+        setState({
+          general: {
+            headerName: selectedColumn,
+            width: '120',
+            columnType: 'Default',
+            pinnedPosition: 'Not pinned',
+            filter: 'Enabled',
+            filterType: 'Auto',
+            sortable: true,
+            resizable: true,
+            hidden: false,
+            editable: true,
+          },
+          header: {
+            applyStyles: false,
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            fontWeight: 'Normal',
+            bold: false,
+            italic: false,
+            underline: false,
+            textColor: '#000000',
+            backgroundColor: '#FFFFFF',
+            alignH: 'left',
+            borderStyle: 'Solid',
+            borderWidth: 1,
+            borderColor: '#000000',
+            borderSides: 'All',
+          },
+          cell: {
+            applyStyles: false,
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            fontWeight: 'Normal',
+            bold: false,
+            italic: false,
+            underline: false,
+            textColor: '#000000',
+            backgroundColor: '#FFFFFF',
+            alignH: 'left',
+            borderStyle: 'Solid',
+            borderWidth: 1,
+            borderColor: '#000000',
+            borderSides: 'All',
+          }
+        });
+      }
+    }
+  }, [open, selectedColumn, gridStore]);
 
-  // Handle form submission
+  // Update section handlers
+  const updateGeneral = (updates: Partial<ColumnSettingsState['general']>) => {
+    if (!state) return;
+    setState({
+      ...state,
+      general: {
+        ...state.general,
+        ...updates
+      }
+    });
+  };
+
+  const updateHeader = (updates: Partial<ColumnSettingsState['header']>) => {
+    if (!state) return;
+    setState({
+      ...state,
+      header: {
+        ...state.header,
+        ...updates
+      }
+    });
+  };
+
+  const updateCell = (updates: Partial<ColumnSettingsState['cell']>) => {
+    if (!state) return;
+    setState({
+      ...state,
+      cell: {
+        ...state.cell,
+        ...updates
+      }
+    });
+  };
+
+  // Handle apply changes
   const handleApplyChanges = () => {
-    // Here you would apply the changes to the grid
-    console.log('Applying changes:', state);
-    onOpenChange(false);
+    if (!state || !selectedColumn) return;
+    
+    console.log('Applying changes to grid for column:', selectedColumn);
+    
+    try {
+      // Save settings to grid store
+      gridStore.saveColumnSettings(selectedColumn, state);
+      
+      // Apply settings to grid
+      gridStore.applyColumnSettings(selectedColumn);
+      
+      // Close dialog
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error when applying column settings:', error);
+      onOpenChange(false);
+    }
   };
 
   // Handle reset
   const handleReset = () => {
-    resetForColumn(selectedColumn);
+    // Reset to original loaded settings or defaults
+    if (open && selectedColumn) {
+      const settings = gridStore.getColumnSettings(selectedColumn);
+      
+      if (settings) {
+        setState(settings);
+      } else {
+        setState({
+          general: {
+            headerName: selectedColumn,
+            width: '120',
+            columnType: 'Default',
+            pinnedPosition: 'Not pinned',
+            filter: 'Enabled',
+            filterType: 'Auto',
+            sortable: true,
+            resizable: true,
+            hidden: false,
+            editable: true,
+          },
+          header: {
+            applyStyles: false,
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            fontWeight: 'Normal',
+            bold: false,
+            italic: false,
+            underline: false,
+            textColor: '#000000',
+            backgroundColor: '#FFFFFF',
+            alignH: 'left',
+            borderStyle: 'Solid',
+            borderWidth: 1,
+            borderColor: '#000000',
+            borderSides: 'All',
+          },
+          cell: {
+            applyStyles: false,
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            fontWeight: 'Normal',
+            bold: false,
+            italic: false,
+            underline: false,
+            textColor: '#000000',
+            backgroundColor: '#FFFFFF',
+            alignH: 'left',
+            borderStyle: 'Solid',
+            borderWidth: 1,
+            borderColor: '#000000',
+            borderSides: 'All',
+          }
+        });
+      }
+    }
   };
+
+  // Don't render anything if state is not initialized yet
+  if (!state) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

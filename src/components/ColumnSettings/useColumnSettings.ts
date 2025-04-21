@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGridStore } from '@/store/gridStore';
 import { ColDef, ColumnState } from 'ag-grid-community';
 
@@ -82,7 +82,14 @@ export const useColumnSettings = (initialColumn: string) => {
 
       if (savedProfiles[profileName]) {
         console.log(`Found saved profile for column ${columnField}:`, savedProfiles[profileName]);
-        return savedProfiles[profileName];
+        
+        // Create a clean copy to avoid circular references
+        const profile = savedProfiles[profileName];
+        return {
+          general: { ...profile.general },
+          header: { ...profile.header },
+          cell: { ...profile.cell }
+        };
       }
     } catch (error) {
       console.error('Error checking for saved profile:', error);
@@ -191,74 +198,66 @@ export const useColumnSettings = (initialColumn: string) => {
     return 'Auto';
   };
 
-  const [state, setState] = useState<ColumnSettingsState>(() => getInitialState(initialColumn));
+  // Use a ref to track the current column name to avoid unnecessary state updates
+  const currentColumnRef = useRef<string>(initialColumn);
+  
+  // Track whether we've initialized the state for a given column to avoid redundant resets
+  const hasInitializedRef = useRef<Record<string, boolean>>({});
+  
+  // Track whether the state update was triggered internally to avoid circular updates
+  const internalUpdateRef = useRef<boolean>(false);
+  
+  const [state, setState] = useState<ColumnSettingsState>(() => {
+    // Mark initialColumn as initialized
+    hasInitializedRef.current[initialColumn] = true;
+    return getInitialState(initialColumn);
+  });
 
-  // Log state changes
-  useEffect(() => {
-    console.log('useColumnSettings state updated:', state);
-  }, [state]);
-
-  // Update a specific section of state
+  // Update a specific section of state with improved circular dependency prevention
   const updateSection = useCallback(<K extends keyof ColumnSettingsState>(
     section: K,
     updates: Partial<ColumnSettingsState[K]>
   ) => {
     console.log(`Updating ${section} section with:`, updates);
+    
+    // Skip if we're in the middle of an internal reset operation
+    if (internalUpdateRef.current) {
+      console.log('Skipping update during column reset');
+      return;
+    }
+    
+    // Simplify the update logic to avoid deep comparisons
     setState(prev => {
-      // Create a deep copy of the previous state to avoid reference issues
-      const prevCopy = JSON.parse(JSON.stringify(prev));
-
-      // Check if there are actual changes
-      const hasChanges = Object.entries(updates).some(([key, value]) => {
-        const typedKey = key as keyof ColumnSettingsState[K];
-        return prevCopy[section][typedKey] !== value;
-      });
-
-      if (!hasChanges) {
-        console.log(`No changes detected for ${section}, returning previous state`);
-        return prevCopy;
-      }
-
-      const newState = {
-        ...prevCopy,
+      // Always create a new reference to avoid circular updates
+      const result = {
+        ...prev,
         [section]: {
-          ...prevCopy[section],
+          ...prev[section],
           ...updates
         }
       };
-      console.log(`New state for ${section}:`, newState[section]);
-      return newState;
+      
+      // Special handling for headerName updates to keep column tracking in sync
+      if (section === 'general' && 'headerName' in updates && updates.headerName) {
+        // This is critical - update our ref to match the new headerName
+        // to avoid circular rendering with resetForColumn
+        if (updates.headerName !== currentColumnRef.current) {
+          console.log(`Updating internal column reference to: ${updates.headerName}`);
+          currentColumnRef.current = updates.headerName as string;
+        }
+      }
+      
+      return result;
     });
   }, []);
 
   // Update general settings
   const updateGeneral = useCallback((updates: Partial<ColumnSettingsState['general']>) => {
     console.log('updateGeneral called with:', updates);
-    setState(prev => {
-      // Create a deep copy of the previous state to avoid reference issues
-      const prevCopy = JSON.parse(JSON.stringify(prev));
-
-      // Only update state if there are actual changes
-      const hasChanges = Object.entries(updates).some(([key, value]) => {
-        return prevCopy.general[key as keyof ColumnSettingsState['general']] !== value;
-      });
-
-      if (!hasChanges) {
-        console.log('No changes detected, returning previous state');
-        return prevCopy; // Return previous state if no changes
-      }
-
-      const newSettings = {
-        ...prevCopy,
-        general: {
-          ...prevCopy.general,
-          ...updates
-        }
-      };
-      console.log('Updated general settings:', newSettings.general);
-      return newSettings;
-    });
-  }, []);
+    
+    // Directly use the updateSection function to maintain consistency
+    updateSection('general', updates);
+  }, [updateSection]);
 
   // Update header settings
   const updateHeader = useCallback((updates: Partial<ColumnSettingsState['header']>) => {
@@ -270,336 +269,333 @@ export const useColumnSettings = (initialColumn: string) => {
     updateSection('cell', updates);
   }, [updateSection]);
 
-  // Reset state for a new column
+  // Reset state for a new column - completely rewritten to avoid circular dependencies
   const resetForColumn = useCallback((columnName: string) => {
-    // Get initial state for the selected column
-    setState(getInitialState(columnName));
+    // Skip if column name is empty
+    if (!columnName) {
+      console.log('Empty column name, skipping reset');
+      return;
+    }
+    
+    // Get current column from the ref
+    const currentColumn = currentColumnRef.current;
+    
+    // Skip if trying to reset to the same column that's already loaded
+    if (currentColumn === columnName) {
+      console.log('Column already selected, skipping reset:', columnName);
+      return;
+    }
+    
+    // Check if we've already initialized this column before
+    if (hasInitializedRef.current[columnName]) {
+      console.log(`Column ${columnName} was previously initialized, using cached state`);
+      // We'll still reset, but we know this shouldn't cause a circular update
+    }
+    
+    console.log(`Resetting column from ${currentColumn} to ${columnName}`);
+    
+    // Set the flag to indicate we're doing an internal update
+    internalUpdateRef.current = true;
+    
+    // Update the ref FIRST before any state changes
+    currentColumnRef.current = columnName;
+    
+    // Mark this column as initialized
+    hasInitializedRef.current[columnName] = true;
+    
+    try {
+      // Get fresh initial state for the column
+      const newState = getInitialState(columnName);
+      
+      // Set state with the new initial state
+      setState(newState);
+    } catch (error) {
+      console.error('Error getting initial state for column:', error);
+      
+      // Fallback to a basic default state
+      setState({
+        general: { 
+          headerName: columnName, 
+          width: '120', 
+          columnType: 'Default', 
+          pinnedPosition: 'Not pinned', 
+          filter: 'Enabled', 
+          filterType: 'Auto', 
+          sortable: true, 
+          resizable: true, 
+          hidden: false, 
+          editable: true 
+        },
+        header: { 
+          applyStyles: false, 
+          fontFamily: 'Arial', 
+          fontSize: '14px', 
+          fontWeight: 'Normal', 
+          bold: false, 
+          italic: false, 
+          underline: false, 
+          textColor: '#000000', 
+          backgroundColor: '#FFFFFF', 
+          alignH: 'left', 
+          borderStyle: 'Solid', 
+          borderWidth: 1, 
+          borderColor: '#000000', 
+          borderSides: 'All' 
+        },
+        cell: { 
+          applyStyles: false, 
+          fontFamily: 'Arial', 
+          fontSize: '14px', 
+          fontWeight: 'Normal', 
+          bold: false, 
+          italic: false, 
+          underline: false, 
+          textColor: '#000000', 
+          backgroundColor: '#FFFFFF', 
+          alignH: 'left', 
+          borderStyle: 'Solid', 
+          borderWidth: 1, 
+          borderColor: '#000000', 
+          borderSides: 'All' 
+        }
+      });
+    } finally {
+      // Reset the flag after the state update is queued
+      setTimeout(() => {
+        internalUpdateRef.current = false;
+      }, 0);
+    }
   }, [getInitialState]);
 
-  // Apply column settings to the grid - Updated for AG Grid 33+
+  // Apply column settings to the grid - completely rewritten for reliability
   const applySettingsToGrid = useCallback((columnField: string) => {
     console.log('Applying settings to grid for column:', columnField);
-    console.log('Grid API available:', !!gridApi);
+    
+    // Early returns for invalid input
     if (!gridApi) {
-      console.error('Grid API not available');
+      console.error('Grid API not available for applying settings');
+      return false;
+    }
+    
+    if (!columnField) {
+      console.error('No column field provided');
       return false;
     }
 
     try {
-      // Get the column from the grid - AG Grid 33+ approach
-      console.log('Grid API methods:', Object.keys(gridApi).filter(key => typeof gridApi[key] === 'function'));
-      console.log('Column API available:', !!gridApi.columnApi);
-      if (gridApi.columnApi) {
-        console.log('Column API methods:', Object.keys(gridApi.columnApi).filter(key => typeof gridApi.columnApi[key] === 'function'));
+      // Log useful debugging info
+      console.log('Current state being applied:', {
+        general: state.general.headerName, 
+        header: state.header.applyStyles,
+        cell: state.cell.applyStyles
+      });
+      
+      // Create stable copies of all settings
+      const generalSettings = {...state.general};
+      const headerSettings = {...state.header};
+      const cellSettings = {...state.cell};
+      
+      // Get the column by ID - try multiple methods
+      let column = null;
+      let colDef = null;
+      
+      // Method 1: Direct getColumn
+      if (gridApi.getColumn && typeof gridApi.getColumn === 'function') {
+        column = gridApi.getColumn(columnField);
       }
-
-      const column = gridApi.getColumn ? gridApi.getColumn(columnField) : null;
-
+      
+      // Method 2: Search in all columns
+      if (!column && gridApi.getColumns && typeof gridApi.getColumns === 'function') {
+        const allColumns = gridApi.getColumns();
+        column = allColumns.find(c => c.getColId() === columnField);
+      }
+      
+      // If we found a column, get its definition
       if (column) {
         console.log('Column found:', columnField);
-        console.log('Column methods:', Object.keys(column).filter(key => typeof column[key] === 'function'));
-      }
-
-      if (!column) {
-        console.error(`Column ${columnField} not found or getColumn method not available`);
-
-        // Try an alternative approach if the API has changed
-        if (gridApi.columnModel && typeof gridApi.columnModel.getColumn === 'function') {
-          const altColumn = gridApi.columnModel.getColumn(columnField);
-          if (altColumn) {
-            console.log('Found column using alternative API');
-            // We can't use 'this' in a callback function
-            // Let's implement the alternative approach inline
-            try {
-              const altColDef = altColumn.getColDef ? altColumn.getColDef() : {};
-              const { general, header, cell } = state;
-
-              // Update properties
-              altColDef.headerName = general.headerName;
-              altColDef.width = parseInt(general.width, 10) || undefined;
-              altColDef.sortable = general.sortable;
-              altColDef.resizable = general.resizable;
-              altColDef.filter = general.filter === 'Enabled' ? true : false;
-              altColDef.editable = general.editable;
-
-              // Apply header styles only if enabled
-              if (header.applyStyles) {
-                // Apply header styles using the same approach
-                altColDef.headerClass = `custom-header-${columnField}`;
-
-                // Create header styles
-                let headerStyle = '';
-                if (header.fontFamily) headerStyle += `font-family: ${header.fontFamily}; `;
-                if (header.fontSize) headerStyle += `font-size: ${header.fontSize}; `;
-                if (header.bold) headerStyle += 'font-weight: bold; ';
-                if (header.italic) headerStyle += 'font-style: italic; ';
-                if (header.underline) headerStyle += 'text-decoration: underline; ';
-                if (header.textColor) headerStyle += `color: ${header.textColor}; `;
-                if (header.backgroundColor) headerStyle += `background-color: ${header.backgroundColor}; `;
-                if (header.alignH) headerStyle += `text-align: ${header.alignH}; `;
-
-                // Apply the CSS to the document
-                if (headerStyle) {
-                  let styleElement = document.getElementById(`header-style-${columnField}`);
-                  if (!styleElement) {
-                    styleElement = document.createElement('style');
-                    styleElement.id = `header-style-${columnField}`;
-                    document.head.appendChild(styleElement);
-                  }
-                  styleElement.textContent = `.ag-header-cell.custom-header-${columnField}, .ag-header-cell[col-id="${columnField}"] { ${headerStyle} }`;
-                }
-              } else {
-                // Remove any existing styles if not enabled
-                const styleElement = document.getElementById(`header-style-${columnField}`);
-                if (styleElement) {
-                  styleElement.remove();
-                }
-              }
-
-              // Apply cell styles only if enabled
-              if (cell.applyStyles) {
-                // Apply cell styles
-                altColDef.cellClass = `custom-cell-${columnField}`;
-
-                // Create cell styles
-                let cellStyle = '';
-                if (cell.fontFamily) cellStyle += `font-family: ${cell.fontFamily}; `;
-                if (cell.fontSize) cellStyle += `font-size: ${cell.fontSize}; `;
-                if (cell.bold) cellStyle += 'font-weight: bold; ';
-                if (cell.italic) cellStyle += 'font-style: italic; ';
-                if (cell.underline) cellStyle += 'text-decoration: underline; ';
-                if (cell.textColor) cellStyle += `color: ${cell.textColor}; `;
-                if (cell.backgroundColor) cellStyle += `background-color: ${cell.backgroundColor}; `;
-                if (cell.alignH) cellStyle += `text-align: ${cell.alignH}; `;
-
-                // Apply the CSS to the document
-                if (cellStyle) {
-                  let styleElement = document.getElementById(`cell-style-${columnField}`);
-                  if (!styleElement) {
-                    styleElement = document.createElement('style');
-                    styleElement.id = `cell-style-${columnField}`;
-                    document.head.appendChild(styleElement);
-                  }
-                  styleElement.textContent = `.ag-cell.custom-cell-${columnField}, .ag-cell[col-id="${columnField}"] { ${cellStyle} }`;
-                }
-              } else {
-                // Remove any existing styles if not enabled
-                const styleElement = document.getElementById(`cell-style-${columnField}`);
-                if (styleElement) {
-                  styleElement.remove();
-                }
-              }
-
-              // Refresh the grid
-              if (gridApi.refreshHeader) gridApi.refreshHeader();
-              if (gridApi.redrawRows) gridApi.redrawRows();
-
-              return true;
-            } catch (altError) {
-              console.error('Error using alternative API:', altError);
-              return false;
-            }
-          }
+        if (column.getColDef && typeof column.getColDef === 'function') {
+          colDef = column.getColDef();
         }
-
+      } else {
+        console.error('Column not found in grid:', columnField);
         return false;
       }
-
-      // Get the current state
-      const { general, header, cell } = state;
-
-      // Get the column definition directly from the column
-      // In AG-Grid 33+, we update the column definition directly
-      const colDef = column.getColDef ? column.getColDef() : {};
-
-      console.log('Column definition:', colDef);
-
-      // Check if we have a valid column definition
+      
+      // Ensure we have a valid column definition
       if (!colDef) {
         console.error('Failed to get column definition');
         return false;
       }
-
-      // Update the column definition properties
-      colDef.headerName = general.headerName;
-      colDef.width = parseInt(general.width, 10) || undefined;
-      colDef.sortable = general.sortable;
-      colDef.resizable = general.resizable;
-      colDef.filter = general.filter === 'Enabled' ? true : false;
-      colDef.editable = general.editable;
+      
+      // Apply general settings
+      console.log('Applying general settings to column');
+      colDef.headerName = generalSettings.headerName;
+      colDef.width = parseInt(generalSettings.width, 10) || undefined;
+      colDef.sortable = generalSettings.sortable;
+      colDef.resizable = generalSettings.resizable;
+      colDef.filter = generalSettings.filter === 'Enabled' ? true : false;
+      colDef.editable = generalSettings.editable;
 
       // Handle column type
-      if (general.columnType === 'Number') {
+      if (generalSettings.columnType === 'Number') {
         colDef.type = 'customNumeric';
         colDef.filter = 'agNumberColumnFilter';
-      } else if (general.columnType === 'Date') {
+      } else if (generalSettings.columnType === 'Date') {
         colDef.type = 'customDate';
         colDef.filter = 'agDateColumnFilter';
-      } else if (general.columnType === 'String') {
+      } else if (generalSettings.columnType === 'String') {
         colDef.type = undefined;
         colDef.filter = 'agTextColumnFilter';
       }
 
       // Update filter type if filter is enabled
-      if (general.filter === 'Enabled' && general.filterType !== 'Auto') {
-        if (general.filterType === 'Text') colDef.filter = 'agTextColumnFilter';
-        if (general.filterType === 'Number') colDef.filter = 'agNumberColumnFilter';
-        if (general.filterType === 'Date') colDef.filter = 'agDateColumnFilter';
+      if (generalSettings.filter === 'Enabled' && generalSettings.filterType !== 'Auto') {
+        if (generalSettings.filterType === 'Text') colDef.filter = 'agTextColumnFilter';
+        if (generalSettings.filterType === 'Number') colDef.filter = 'agNumberColumnFilter';
+        if (generalSettings.filterType === 'Date') colDef.filter = 'agDateColumnFilter';
       }
 
-      // Apply header styles only if enabled
-      console.log('Header styles enabled:', header.applyStyles);
+      // Apply header styles
+      if (headerSettings.applyStyles) {
+        console.log('Applying header styles');
+        
+        // Set header class
+        colDef.headerClass = `custom-header-${columnField}`;
 
-      if (header.applyStyles) {
-        console.log('Applying header styles:', header);
-
-        // Create a headerClass function to apply custom styles
-        colDef.headerClass = (params: any) => {
-          // Return a unique class name for this column
-          return `custom-header-${columnField}`;
-        };
-
-        // Create a CSS style string for the header
+        // Create CSS for header
         let headerStyle = '';
-        if (header.fontFamily) headerStyle += `font-family: ${header.fontFamily}; `;
-        if (header.fontSize) headerStyle += `font-size: ${header.fontSize}; `;
-        if (header.bold) headerStyle += 'font-weight: bold; ';
-        if (header.italic) headerStyle += 'font-style: italic; ';
-        if (header.underline) headerStyle += 'text-decoration: underline; ';
-        if (header.textColor) headerStyle += `color: ${header.textColor}; `;
-        if (header.backgroundColor) headerStyle += `background-color: ${header.backgroundColor}; `;
-        if (header.alignH) headerStyle += `text-align: ${header.alignH}; `;
+        if (headerSettings.fontFamily) headerStyle += `font-family: ${headerSettings.fontFamily}; `;
+        if (headerSettings.fontSize) headerStyle += `font-size: ${headerSettings.fontSize}; `;
+        if (headerSettings.bold) headerStyle += 'font-weight: bold; ';
+        if (headerSettings.italic) headerStyle += 'font-style: italic; ';
+        if (headerSettings.underline) headerStyle += 'text-decoration: underline; ';
+        if (headerSettings.textColor) headerStyle += `color: ${headerSettings.textColor}; `;
+        if (headerSettings.backgroundColor) headerStyle += `background-color: ${headerSettings.backgroundColor}; `;
+        if (headerSettings.alignH) headerStyle += `text-align: ${headerSettings.alignH}; `;
 
-        // Apply border styles if specified
-        if (header.borderStyle && header.borderWidth && header.borderColor) {
-          const borderStyle = `${header.borderWidth}px ${header.borderStyle.toLowerCase()} ${header.borderColor}`;
+        // Add border styles if specified
+        if (headerSettings.borderStyle && headerSettings.borderWidth && headerSettings.borderColor) {
+          const borderStyle = `${headerSettings.borderWidth}px ${headerSettings.borderStyle.toLowerCase()} ${headerSettings.borderColor}`;
 
-          if (header.borderSides === 'All') {
+          if (headerSettings.borderSides === 'All') {
             headerStyle += `border: ${borderStyle}; `;
-          } else if (header.borderSides === 'Top') {
+          } else if (headerSettings.borderSides === 'Top') {
             headerStyle += `border-top: ${borderStyle}; `;
-          } else if (header.borderSides === 'Right') {
+          } else if (headerSettings.borderSides === 'Right') {
             headerStyle += `border-right: ${borderStyle}; `;
-          } else if (header.borderSides === 'Bottom') {
+          } else if (headerSettings.borderSides === 'Bottom') {
             headerStyle += `border-bottom: ${borderStyle}; `;
-          } else if (header.borderSides === 'Left') {
+          } else if (headerSettings.borderSides === 'Left') {
             headerStyle += `border-left: ${borderStyle}; `;
           }
         }
 
-        // Apply the CSS to the document
+        // Apply the CSS
         if (headerStyle) {
-          // Create or update a style element for this column's header
           let styleElement = document.getElementById(`header-style-${columnField}`);
           if (!styleElement) {
             styleElement = document.createElement('style');
             styleElement.id = `header-style-${columnField}`;
             document.head.appendChild(styleElement);
           }
-
           styleElement.textContent = `.ag-header-cell.custom-header-${columnField}, .ag-header-cell[col-id="${columnField}"] { ${headerStyle} }`;
         }
       } else {
-        // Remove any existing styles if not enabled
+        // Remove styles if disabled
         const styleElement = document.getElementById(`header-style-${columnField}`);
-        if (styleElement) {
-          styleElement.remove();
-        }
-
-        // Remove the headerClass if it was previously set
-        if (colDef.headerClass) {
-          colDef.headerClass = undefined;
-        }
+        if (styleElement) styleElement.remove();
+        
+        // Clear the header class
+        if (colDef.headerClass) colDef.headerClass = undefined;
       }
 
-      // Apply cell styles only if enabled
-      console.log('Cell styles enabled:', cell.applyStyles);
+      // Apply cell styles
+      if (cellSettings.applyStyles) {
+        console.log('Applying cell styles');
+        
+        // Set cell class
+        colDef.cellClass = `custom-cell-${columnField}`;
 
-      if (cell.applyStyles) {
-        console.log('Applying cell styles:', cell);
-
-        // Create a cellClass function to apply custom styles
-        colDef.cellClass = (params: any) => {
-          // Return a unique class name for this column's cells
-          return `custom-cell-${columnField}`;
-        };
-
-        // Create a CSS style string for the cells
+        // Create CSS for cells
         let cellStyle = '';
-        if (cell.fontFamily) cellStyle += `font-family: ${cell.fontFamily}; `;
-        if (cell.fontSize) cellStyle += `font-size: ${cell.fontSize}; `;
-        if (cell.bold) cellStyle += 'font-weight: bold; ';
-        if (cell.italic) cellStyle += 'font-style: italic; ';
-        if (cell.underline) cellStyle += 'text-decoration: underline; ';
-        if (cell.textColor) cellStyle += `color: ${cell.textColor}; `;
-        if (cell.backgroundColor) cellStyle += `background-color: ${cell.backgroundColor}; `;
-        if (cell.alignH) cellStyle += `text-align: ${cell.alignH}; `;
+        if (cellSettings.fontFamily) cellStyle += `font-family: ${cellSettings.fontFamily}; `;
+        if (cellSettings.fontSize) cellStyle += `font-size: ${cellSettings.fontSize}; `;
+        if (cellSettings.bold) cellStyle += 'font-weight: bold; ';
+        if (cellSettings.italic) cellStyle += 'font-style: italic; ';
+        if (cellSettings.underline) cellStyle += 'text-decoration: underline; ';
+        if (cellSettings.textColor) cellStyle += `color: ${cellSettings.textColor}; `;
+        if (cellSettings.backgroundColor) cellStyle += `background-color: ${cellSettings.backgroundColor}; `;
+        if (cellSettings.alignH) cellStyle += `text-align: ${cellSettings.alignH}; `;
 
-        // Apply border styles if specified
-        if (cell.borderStyle && cell.borderWidth && cell.borderColor) {
-          const borderStyle = `${cell.borderWidth}px ${cell.borderStyle.toLowerCase()} ${cell.borderColor}`;
+        // Add border styles if specified
+        if (cellSettings.borderStyle && cellSettings.borderWidth && cellSettings.borderColor) {
+          const borderStyle = `${cellSettings.borderWidth}px ${cellSettings.borderStyle.toLowerCase()} ${cellSettings.borderColor}`;
 
-          if (cell.borderSides === 'All') {
+          if (cellSettings.borderSides === 'All') {
             cellStyle += `border: ${borderStyle}; `;
-          } else if (cell.borderSides === 'Top') {
+          } else if (cellSettings.borderSides === 'Top') {
             cellStyle += `border-top: ${borderStyle}; `;
-          } else if (cell.borderSides === 'Right') {
+          } else if (cellSettings.borderSides === 'Right') {
             cellStyle += `border-right: ${borderStyle}; `;
-          } else if (cell.borderSides === 'Bottom') {
+          } else if (cellSettings.borderSides === 'Bottom') {
             cellStyle += `border-bottom: ${borderStyle}; `;
-          } else if (cell.borderSides === 'Left') {
+          } else if (cellSettings.borderSides === 'Left') {
             cellStyle += `border-left: ${borderStyle}; `;
           }
         }
 
-        // Apply the CSS to the document
+        // Apply the CSS
         if (cellStyle) {
-          // Create or update a style element for this column's cells
           let styleElement = document.getElementById(`cell-style-${columnField}`);
           if (!styleElement) {
             styleElement = document.createElement('style');
             styleElement.id = `cell-style-${columnField}`;
             document.head.appendChild(styleElement);
           }
-
           styleElement.textContent = `.ag-cell.custom-cell-${columnField}, .ag-cell[col-id="${columnField}"] { ${cellStyle} }`;
         }
       } else {
-        // Remove any existing styles if not enabled
+        // Remove styles if disabled
         const styleElement = document.getElementById(`cell-style-${columnField}`);
-        if (styleElement) {
-          styleElement.remove();
-        }
-
-        // Remove the cellClass if it was previously set
-        if (colDef.cellClass) {
-          colDef.cellClass = undefined;
-        }
+        if (styleElement) styleElement.remove();
+        
+        // Clear the cell class
+        if (colDef.cellClass) colDef.cellClass = undefined;
       }
 
-      // Set column visibility - AG Grid 33+ API
+      // Apply column visibility
       if (typeof column.setVisible === 'function') {
-        column.setVisible(!general.hidden);
+        console.log(`Setting column visibility: ${!generalSettings.hidden}`);
+        column.setVisible(!generalSettings.hidden);
       }
 
-      // Set column pinned state - AG Grid 33+ API
+      // Apply column pinned state
       if (typeof column.setPinned === 'function') {
         let pinnedState = null;
-        if (general.pinnedPosition === 'Left') pinnedState = 'left';
-        if (general.pinnedPosition === 'Right') pinnedState = 'right';
+        if (generalSettings.pinnedPosition === 'Left') pinnedState = 'left';
+        if (generalSettings.pinnedPosition === 'Right') pinnedState = 'right';
+        console.log(`Setting column pinned state: ${pinnedState}`);
         column.setPinned(pinnedState);
       }
-
-      // Refresh the grid to ensure all changes take effect - AG Grid 33+ API
+      
+      // Refresh the grid
+      console.log('Refreshing grid after applying settings');
+      
+      // Refresh cells
+      if (typeof gridApi.refreshCells === 'function') {
+        gridApi.refreshCells({ 
+          force: true, 
+          columns: [columnField] 
+        });
+      }
+      
+      // Refresh header
       if (typeof gridApi.refreshHeader === 'function') {
         gridApi.refreshHeader();
       }
-
-      // Refresh the cells in this column
-      if (typeof gridApi.refreshCells === 'function') {
-        gridApi.refreshCells({ force: true, columns: [columnField] });
-      } else if (typeof gridApi.redrawRows === 'function') {
-        // Fallback to redrawRows if refreshCells is not available
+      
+      // Redraw rows if needed
+      if (typeof gridApi.redrawRows === 'function') {
         gridApi.redrawRows();
       }
 
@@ -611,36 +607,36 @@ export const useColumnSettings = (initialColumn: string) => {
       try {
         if (gridApi.columnApi) {
           console.log('Attempting to use columnApi directly');
-          const { general, header, cell } = state;
+          const generalSettings = {...state.general};
 
           // Try to update the column using columnApi methods
           if (typeof gridApi.columnApi.setColumnWidth === 'function') {
-            gridApi.columnApi.setColumnWidth(columnField, parseInt(general.width, 10) || 120);
+            gridApi.columnApi.setColumnWidth(columnField, parseInt(generalSettings.width, 10) || 120);
           }
 
           if (typeof gridApi.columnApi.setColumnVisible === 'function') {
-            gridApi.columnApi.setColumnVisible(columnField, !general.hidden);
+            gridApi.columnApi.setColumnVisible(columnField, !generalSettings.hidden);
           }
 
           if (typeof gridApi.columnApi.setColumnPinned === 'function') {
             let pinnedState = null;
-            if (general.pinnedPosition === 'Left') pinnedState = 'left';
-            if (general.pinnedPosition === 'Right') pinnedState = 'right';
+            if (generalSettings.pinnedPosition === 'Left') pinnedState = 'left';
+            if (generalSettings.pinnedPosition === 'Right') pinnedState = 'right';
             gridApi.columnApi.setColumnPinned(columnField, pinnedState);
           }
 
           // Apply header styles only if enabled
-          if (header.applyStyles) {
+          if (state.header.applyStyles) {
             // Apply header styles using CSS
             let headerStyle = '';
-            if (header.fontFamily) headerStyle += `font-family: ${header.fontFamily}; `;
-            if (header.fontSize) headerStyle += `font-size: ${header.fontSize}; `;
-            if (header.bold) headerStyle += 'font-weight: bold; ';
-            if (header.italic) headerStyle += 'font-style: italic; ';
-            if (header.underline) headerStyle += 'text-decoration: underline; ';
-            if (header.textColor) headerStyle += `color: ${header.textColor}; `;
-            if (header.backgroundColor) headerStyle += `background-color: ${header.backgroundColor}; `;
-            if (header.alignH) headerStyle += `text-align: ${header.alignH}; `;
+            if (state.header.fontFamily) headerStyle += `font-family: ${state.header.fontFamily}; `;
+            if (state.header.fontSize) headerStyle += `font-size: ${state.header.fontSize}; `;
+            if (state.header.bold) headerStyle += 'font-weight: bold; ';
+            if (state.header.italic) headerStyle += 'font-style: italic; ';
+            if (state.header.underline) headerStyle += 'text-decoration: underline; ';
+            if (state.header.textColor) headerStyle += `color: ${state.header.textColor}; `;
+            if (state.header.backgroundColor) headerStyle += `background-color: ${state.header.backgroundColor}; `;
+            if (state.header.alignH) headerStyle += `text-align: ${state.header.alignH}; `;
 
             // Apply the CSS to the document
             if (headerStyle) {
@@ -661,17 +657,17 @@ export const useColumnSettings = (initialColumn: string) => {
           }
 
           // Apply cell styles only if enabled
-          if (cell.applyStyles) {
+          if (state.cell.applyStyles) {
             // Apply cell styles using CSS
             let cellStyle = '';
-            if (cell.fontFamily) cellStyle += `font-family: ${cell.fontFamily}; `;
-            if (cell.fontSize) cellStyle += `font-size: ${cell.fontSize}; `;
-            if (cell.bold) cellStyle += 'font-weight: bold; ';
-            if (cell.italic) cellStyle += 'font-style: italic; ';
-            if (cell.underline) cellStyle += 'text-decoration: underline; ';
-            if (cell.textColor) cellStyle += `color: ${cell.textColor}; `;
-            if (cell.backgroundColor) cellStyle += `background-color: ${cell.backgroundColor}; `;
-            if (cell.alignH) cellStyle += `text-align: ${cell.alignH}; `;
+            if (state.cell.fontFamily) cellStyle += `font-family: ${state.cell.fontFamily}; `;
+            if (state.cell.fontSize) cellStyle += `font-size: ${state.cell.fontSize}; `;
+            if (state.cell.bold) cellStyle += 'font-weight: bold; ';
+            if (state.cell.italic) cellStyle += 'font-style: italic; ';
+            if (state.cell.underline) cellStyle += 'text-decoration: underline; ';
+            if (state.cell.textColor) cellStyle += `color: ${state.cell.textColor}; `;
+            if (state.cell.backgroundColor) cellStyle += `background-color: ${state.cell.backgroundColor}; `;
+            if (state.cell.alignH) cellStyle += `text-align: ${state.cell.alignH}; `;
 
             // Apply the CSS to the document
             if (cellStyle) {
@@ -713,8 +709,12 @@ export const useColumnSettings = (initialColumn: string) => {
       const profilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
       const profiles = JSON.parse(profilesJson);
 
-      // Create a deep copy of the state to avoid reference issues
-      const stateCopy = JSON.parse(JSON.stringify(state));
+      // Create a safe copy of the state - using spread to avoid circular references
+      const stateCopy = {
+        general: {...state.general},
+        header: {...state.header},
+        cell: {...state.cell}
+      };
 
       // Add or update the profile
       profiles[profileName] = stateCopy;
@@ -747,11 +747,13 @@ export const useColumnSettings = (initialColumn: string) => {
       // Load the profile
       console.log(`Loading profile '${profileName}':`, profiles[profileName]);
 
-      // Create a deep copy of the profile to avoid reference issues
-      const profileCopy = JSON.parse(JSON.stringify(profiles[profileName]));
-
-      // Always update the state with the profile, even if it seems identical
-      // This ensures that the state is properly updated
+      // Create a safe copy to avoid reference issues
+      const profile = profiles[profileName];
+      const profileCopy = {
+        general: {...profile.general},
+        header: {...profile.header},
+        cell: {...profile.cell}
+      };
 
       console.log('Setting state to profile:', profileCopy);
       setState(profileCopy);

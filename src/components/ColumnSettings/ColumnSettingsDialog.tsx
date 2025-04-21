@@ -71,10 +71,16 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
     resetColumnSettings(column);
   }, [resetColumnSettings]);
 
-  // Update state when selected column changes
+  // Update state when selected column changes - with condition to prevent infinite loop
   useEffect(() => {
     console.log('ColumnSettingsDialog: open =', open, 'selectedColumn =', selectedColumn);
     if (open && selectedColumn) {
+      // Check if we need to reset or if this column is already selected
+      if (state.general?.headerName === selectedColumn) {
+        console.log(`Column ${selectedColumn} already selected, skipping reset`);
+        return;
+      }
+      
       // Check if there's a saved profile for this column
       const savedProfilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
       const savedProfiles = JSON.parse(savedProfilesJson);
@@ -103,7 +109,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
       // Force refresh of available profiles
       setProfilesVersion(prev => prev + 1);
     }
-  }, [selectedColumn, open, resetForColumn, loadProfile, applySettingsToGrid, setProfilesVersion]); // Now using memoized resetForColumn
+  }, [selectedColumn, open, resetForColumn, loadProfile, applySettingsToGrid, setProfilesVersion, state.general?.headerName]); // Added state.general.headerName dependency
 
   // Replace the current useEffect for handling focus and the global key listener with this:
   useEffect(() => {

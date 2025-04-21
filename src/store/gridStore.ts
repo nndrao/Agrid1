@@ -49,7 +49,8 @@ export interface GridProfile {
     options?: Record<string, unknown>;
   };
 
-
+  // Column settings profiles
+  columnSettingsProfiles?: Record<string, any>;
 
   // Theme
   themeMode?: 'light' | 'dark' | 'system';
@@ -76,7 +77,8 @@ interface GridSettings {
   pivotState: any;
   chartState: any;
 
-
+  // Column settings
+  columnSettingsProfiles: Record<string, any>;
 
   // Theme
   themeMode: 'light' | 'dark' | 'system';
@@ -101,8 +103,7 @@ const defaultProfile: GridProfile = {
   rowGroupState: [],
   pivotState: { pivotColumns: [], valueColumns: [] },
   chartState: { chartType: 'bar' },
-
-
+  columnSettingsProfiles: {},
   themeMode: 'system',
   createdAt: Date.now(),
   updatedAt: Date.now()
@@ -143,9 +144,12 @@ interface GridStore {
   resetSettingsToProfile: () => void;
   setThemeMode: (mode: 'light' | 'dark' | 'system') => void;
 
-  // Dialog settings
-
-
+  // Column settings management
+  getColumnSettings: (columnField: string) => any;
+  saveColumnSettings: (columnField: string, settings: any) => void;
+  applyColumnSettings: (columnField: string) => boolean;
+  getColumnSettingsProfiles: () => string[];
+  deleteColumnSettingsProfile: (profileName: string) => void;
 
   // Utility functions
   getGridColumnState: () => any;
@@ -176,8 +180,7 @@ export const useGridStore = create<GridStore>()(
         rowGroupState: null,
         pivotState: null,
         chartState: null,
-
-        columnSettingsState: null,
+        columnSettingsProfiles: {},
         themeMode: 'system'
       },
 
@@ -210,8 +213,7 @@ export const useGridStore = create<GridStore>()(
             rowGroupState: activeProfile.rowGroupState || null,
             pivotState: activeProfile.pivotState || null,
             chartState: activeProfile.chartState || null,
-
-
+            columnSettingsProfiles: activeProfile.columnSettingsProfiles || {},
             themeMode: activeProfile.themeMode || 'system'
           },
           isDirty: false
@@ -286,8 +288,7 @@ export const useGridStore = create<GridStore>()(
                 rowGroupState: defaultProfileItem.rowGroupState || null,
                 pivotState: defaultProfileItem.pivotState || null,
                 chartState: defaultProfileItem.chartState || null,
-
-
+                columnSettingsProfiles: defaultProfileItem.columnSettingsProfiles || {},
                 themeMode: defaultProfileItem.themeMode || 'system'
               },
               isDirty: false
@@ -309,6 +310,7 @@ export const useGridStore = create<GridStore>()(
             font: profile.font || defaultFont,
             fontSize: profile.fontSize || defaultFontSize,
             density: profile.density || defaultDensity,
+            columnSettingsProfiles: profile.columnSettingsProfiles || {},
             themeMode: profile.themeMode || 'system'
           };
 
@@ -318,7 +320,9 @@ export const useGridStore = create<GridStore>()(
             hasColumnsState: !!safeProfile.columnsState,
             columnsStateLength: safeProfile.columnsState ? safeProfile.columnsState.length : 0,
             hasSortState: !!safeProfile.sortState,
-            hasFilterState: !!safeProfile.filterState
+            hasFilterState: !!safeProfile.filterState,
+            hasColumnSettings: !!safeProfile.columnSettingsProfiles,
+            columnSettingsCount: safeProfile.columnSettingsProfiles ? Object.keys(safeProfile.columnSettingsProfiles).length : 0
           });
 
           // Flush and repopulate settings from the profile
@@ -334,8 +338,7 @@ export const useGridStore = create<GridStore>()(
               rowGroupState: safeProfile.rowGroupState || null,
               pivotState: safeProfile.pivotState || null,
               chartState: safeProfile.chartState || null,
-
-
+              columnSettingsProfiles: safeProfile.columnSettingsProfiles || {},
               themeMode: safeProfile.themeMode
             },
             isDirty: false
@@ -445,6 +448,7 @@ export const useGridStore = create<GridStore>()(
             let rowGroupState = null;
             let pivotState = null;
             let chartState = null;
+            let columnSettingsProfiles = get().settings.columnSettingsProfiles;
 
             try {
               // Use the current column state directly from the grid API
@@ -485,7 +489,8 @@ export const useGridStore = create<GridStore>()(
               sortState: sortState || profileToExport.sortState,
               rowGroupState: rowGroupState || profileToExport.rowGroupState,
               pivotState: pivotState || profileToExport.pivotState,
-              chartState: chartState || profileToExport.chartState
+              chartState: chartState || profileToExport.chartState,
+              columnSettingsProfiles: columnSettingsProfiles || profileToExport.columnSettingsProfiles
             };
 
             // Save the current column state to a variable before exporting
@@ -524,8 +529,7 @@ export const useGridStore = create<GridStore>()(
           rowGroupState: profileToExport.rowGroupState,
           pivotState: profileToExport.pivotState,
           chartState: profileToExport.chartState,
-
-
+          columnSettingsProfiles: profileToExport.columnSettingsProfiles,
           themeMode: profileToExport.themeMode,
           exportedAt: Date.now()
         };
@@ -564,9 +568,8 @@ export const useGridStore = create<GridStore>()(
             pivotState: importedData.pivotState || null,
             chartState: importedData.chartState || null,
 
-            // Dialog settings
-
-
+            // Column settings
+            columnSettingsProfiles: importedData.columnSettingsProfiles || {},
 
             // Theme
             themeMode: importedData.themeMode || 'system',
@@ -628,7 +631,8 @@ export const useGridStore = create<GridStore>()(
             'sortState' in partialSettings ||
             'rowGroupState' in partialSettings ||
             'pivotState' in partialSettings ||
-            'chartState' in partialSettings) {
+            'chartState' in partialSettings ||
+            'columnSettingsProfiles' in partialSettings) {
           setTimeout(() => {
             const { gridApi } = get();
             if (gridApi) {
@@ -667,6 +671,8 @@ export const useGridStore = create<GridStore>()(
         let rowGroupState = null;
         let pivotState = null;
         let chartState = null;
+        // Keep column settings profiles from current settings
+        const columnSettingsProfiles = settings.columnSettingsProfiles || {};
 
         try {
           // Use the current column state directly from the grid API
@@ -708,11 +714,14 @@ export const useGridStore = create<GridStore>()(
         if (rowGroupState !== null) updatedSettings.rowGroupState = rowGroupState;
         if (pivotState !== null) updatedSettings.pivotState = pivotState;
         if (chartState !== null) updatedSettings.chartState = chartState;
+        // Always include column settings profiles
+        updatedSettings.columnSettingsProfiles = columnSettingsProfiles;
 
         console.log('Updated settings for profile save:', {
           columnsState: updatedSettings.columnsState,
           filterState: updatedSettings.filterState,
-          sortState: updatedSettings.sortState
+          sortState: updatedSettings.sortState,
+          columnSettingsProfiles: Object.keys(updatedSettings.columnSettingsProfiles).length
         });
 
         if (activeProfile && !activeProfile.isDefault) {
@@ -735,8 +744,7 @@ export const useGridStore = create<GridStore>()(
                       rowGroupState: updatedSettings.rowGroupState,
                       pivotState: updatedSettings.pivotState,
                       chartState: updatedSettings.chartState,
-
-
+                      columnSettingsProfiles: updatedSettings.columnSettingsProfiles,
                       themeMode: updatedSettings.themeMode,
                       updatedAt: Date.now()
                     }
@@ -768,8 +776,6 @@ export const useGridStore = create<GridStore>()(
           }
 
           console.log('Profile saved successfully without full grid refresh');
-
-          console.log('Profile updated successfully');
         } else {
           console.log('Profile not updated: either not found or is default profile');
         }
@@ -792,6 +798,8 @@ export const useGridStore = create<GridStore>()(
           let rowGroupState = null;
           let pivotState = null;
           let chartState = null;
+          // Keep existing column settings profiles
+          const columnSettingsProfiles = get().settings.columnSettingsProfiles || {};
 
           try {
             columnsState = get().getGridColumnState();
@@ -840,6 +848,8 @@ export const useGridStore = create<GridStore>()(
             if (rowGroupState !== null) newSettings.rowGroupState = rowGroupState;
             if (pivotState !== null) newSettings.pivotState = pivotState;
             if (chartState !== null) newSettings.chartState = chartState;
+            // Always include column settings profiles
+            newSettings.columnSettingsProfiles = columnSettingsProfiles;
 
             console.log('Updating settings with extracted grid state:', {
               hasColumnsState: columnsState !== null,
@@ -847,7 +857,8 @@ export const useGridStore = create<GridStore>()(
               hasSortState: sortState !== null,
               hasRowGroupState: rowGroupState !== null,
               hasPivotState: pivotState !== null,
-              hasChartState: chartState !== null
+              hasChartState: chartState !== null,
+              columnSettingsProfilesCount: Object.keys(columnSettingsProfiles).length
             });
 
             return {
@@ -880,6 +891,8 @@ export const useGridStore = create<GridStore>()(
           columnsStateLength: settings.columnsState ? settings.columnsState.length : 0,
           hasFilterState: !!settings.filterState,
           hasSortState: !!settings.sortState,
+          hasColumnSettingsProfiles: !!settings.columnSettingsProfiles,
+          columnSettingsProfilesCount: settings.columnSettingsProfiles ? Object.keys(settings.columnSettingsProfiles).length : 0,
           activeProfileId: get().activeProfileId
         });
 
@@ -1058,8 +1071,7 @@ export const useGridStore = create<GridStore>()(
             rowGroupState: activeProfile.rowGroupState || null,
             pivotState: activeProfile.pivotState || null,
             chartState: activeProfile.chartState || null,
-
-
+            columnSettingsProfiles: activeProfile.columnSettingsProfiles || {},
             themeMode: activeProfile.themeMode || 'system'
           },
           isDirty: false
@@ -1082,9 +1094,268 @@ export const useGridStore = create<GridStore>()(
         }));
       },
 
-      // Dialog settings updates
+      // Column settings management
+      getColumnSettings: (columnField) => {
+        const { settings } = get();
+        if (!settings.columnSettingsProfiles) {
+          return null;
+        }
+        
+        const profileName = `${columnField}_settings`;
+        return settings.columnSettingsProfiles[profileName] || null;
+      },
 
+      saveColumnSettings: (columnField, columnSettings) => {
+        const { settings } = get();
+        
+        const profileName = `${columnField}_settings`;
+        const updatedProfiles = {
+          ...settings.columnSettingsProfiles,
+          [profileName]: columnSettings
+        };
+        
+        // Update settings with new column profiles
+        set(state => ({
+          settings: {
+            ...state.settings,
+            columnSettingsProfiles: updatedProfiles
+          },
+          isDirty: true
+        }));
+        
+        // Save to active profile
+        get().saveSettingsToProfile();
+        
+        console.log(`Saved column settings for ${columnField}`);
+        return true;
+      },
 
+      applyColumnSettings: (columnField) => {
+        const { gridApi, settings } = get();
+        
+        if (!gridApi) {
+          console.error('Grid API not available for applying column settings');
+          return false;
+        }
+        
+        const profileName = `${columnField}_settings`;
+        const columnSettings = settings.columnSettingsProfiles[profileName];
+        
+        if (!columnSettings) {
+          console.error(`No settings found for column ${columnField}`);
+          return false;
+        }
+        
+        try {
+          // Get the column from grid
+          const column = gridApi.getColumn(columnField);
+          if (!column) {
+            console.error(`Column ${columnField} not found in grid`);
+            return false;
+          }
+          
+          // Get column definition
+          const colDef = column.getColDef();
+          
+          // Apply general settings
+          if (columnSettings.general) {
+            colDef.headerName = columnSettings.general.headerName;
+            colDef.width = parseInt(columnSettings.general.width, 10) || undefined;
+            colDef.sortable = columnSettings.general.sortable;
+            colDef.resizable = columnSettings.general.resizable;
+            colDef.filter = columnSettings.general.filter === 'Enabled' ? true : false;
+            colDef.editable = columnSettings.general.editable;
+            
+            // Handle column type
+            if (columnSettings.general.columnType === 'Number') {
+              colDef.type = 'customNumeric';
+              colDef.filter = 'agNumberColumnFilter';
+            } else if (columnSettings.general.columnType === 'Date') {
+              colDef.type = 'customDate';
+              colDef.filter = 'agDateColumnFilter';
+            } else if (columnSettings.general.columnType === 'String') {
+              colDef.type = undefined;
+              colDef.filter = 'agTextColumnFilter';
+            }
+            
+            // Handle filter type
+            if (columnSettings.general.filter === 'Enabled' && columnSettings.general.filterType !== 'Auto') {
+              if (columnSettings.general.filterType === 'Text') colDef.filter = 'agTextColumnFilter';
+              if (columnSettings.general.filterType === 'Number') colDef.filter = 'agNumberColumnFilter';
+              if (columnSettings.general.filterType === 'Date') colDef.filter = 'agDateColumnFilter';
+            }
+            
+            // Apply column visibility
+            if (typeof column.setVisible === 'function') {
+              column.setVisible(!columnSettings.general.hidden);
+            }
+            
+            // Apply column pinned state
+            if (typeof column.setPinned === 'function') {
+              let pinnedState = null;
+              if (columnSettings.general.pinnedPosition === 'Left') pinnedState = 'left';
+              if (columnSettings.general.pinnedPosition === 'Right') pinnedState = 'right';
+              column.setPinned(pinnedState);
+            }
+          }
+          
+          // Apply header styles
+          if (columnSettings.header && columnSettings.header.applyStyles) {
+            colDef.headerClass = `custom-header-${columnField}`;
+            
+            // Create CSS for the header
+            let headerStyle = '';
+            const header = columnSettings.header;
+            
+            if (header.fontFamily) headerStyle += `font-family: ${header.fontFamily}; `;
+            if (header.fontSize) headerStyle += `font-size: ${header.fontSize}; `;
+            if (header.bold) headerStyle += 'font-weight: bold; ';
+            if (header.italic) headerStyle += 'font-style: italic; ';
+            if (header.underline) headerStyle += 'text-decoration: underline; ';
+            if (header.textColor) headerStyle += `color: ${header.textColor}; `;
+            if (header.backgroundColor) headerStyle += `background-color: ${header.backgroundColor}; `;
+            if (header.alignH) headerStyle += `text-align: ${header.alignH}; `;
+            
+            // Add border styles
+            if (header.borderStyle && header.borderWidth && header.borderColor) {
+              const borderStyle = `${header.borderWidth}px ${header.borderStyle.toLowerCase()} ${header.borderColor}`;
+              
+              if (header.borderSides === 'All') {
+                headerStyle += `border: ${borderStyle}; `;
+              } else if (header.borderSides === 'Top') {
+                headerStyle += `border-top: ${borderStyle}; `;
+              } else if (header.borderSides === 'Right') {
+                headerStyle += `border-right: ${borderStyle}; `;
+              } else if (header.borderSides === 'Bottom') {
+                headerStyle += `border-bottom: ${borderStyle}; `;
+              } else if (header.borderSides === 'Left') {
+                headerStyle += `border-left: ${borderStyle}; `;
+              }
+            }
+            
+            // Apply the header CSS
+            if (headerStyle) {
+              let styleElement = document.getElementById(`header-style-${columnField}`);
+              if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = `header-style-${columnField}`;
+                document.head.appendChild(styleElement);
+              }
+              styleElement.textContent = `.ag-header-cell.custom-header-${columnField}, .ag-header-cell[col-id="${columnField}"] { ${headerStyle} }`;
+            }
+          } else {
+            // Remove any existing header styles
+            const styleElement = document.getElementById(`header-style-${columnField}`);
+            if (styleElement) styleElement.remove();
+            
+            if (colDef.headerClass) colDef.headerClass = undefined;
+          }
+          
+          // Apply cell styles
+          if (columnSettings.cell && columnSettings.cell.applyStyles) {
+            colDef.cellClass = `custom-cell-${columnField}`;
+            
+            // Create CSS for the cells
+            let cellStyle = '';
+            const cell = columnSettings.cell;
+            
+            if (cell.fontFamily) cellStyle += `font-family: ${cell.fontFamily}; `;
+            if (cell.fontSize) cellStyle += `font-size: ${cell.fontSize}; `;
+            if (cell.bold) cellStyle += 'font-weight: bold; ';
+            if (cell.italic) cellStyle += 'font-style: italic; ';
+            if (cell.underline) cellStyle += 'text-decoration: underline; ';
+            if (cell.textColor) cellStyle += `color: ${cell.textColor}; `;
+            if (cell.backgroundColor) cellStyle += `background-color: ${cell.backgroundColor}; `;
+            if (cell.alignH) cellStyle += `text-align: ${cell.alignH}; `;
+            
+            // Add border styles
+            if (cell.borderStyle && cell.borderWidth && cell.borderColor) {
+              const borderStyle = `${cell.borderWidth}px ${cell.borderStyle.toLowerCase()} ${cell.borderColor}`;
+              
+              if (cell.borderSides === 'All') {
+                cellStyle += `border: ${borderStyle}; `;
+              } else if (cell.borderSides === 'Top') {
+                cellStyle += `border-top: ${borderStyle}; `;
+              } else if (cell.borderSides === 'Right') {
+                cellStyle += `border-right: ${borderStyle}; `;
+              } else if (cell.borderSides === 'Bottom') {
+                cellStyle += `border-bottom: ${borderStyle}; `;
+              } else if (cell.borderSides === 'Left') {
+                cellStyle += `border-left: ${borderStyle}; `;
+              }
+            }
+            
+            // Apply the cell CSS
+            if (cellStyle) {
+              let styleElement = document.getElementById(`cell-style-${columnField}`);
+              if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = `cell-style-${columnField}`;
+                document.head.appendChild(styleElement);
+              }
+              styleElement.textContent = `.ag-cell.custom-cell-${columnField}, .ag-cell[col-id="${columnField}"] { ${cellStyle} }`;
+            }
+          } else {
+            // Remove any existing cell styles
+            const styleElement = document.getElementById(`cell-style-${columnField}`);
+            if (styleElement) styleElement.remove();
+            
+            if (colDef.cellClass) colDef.cellClass = undefined;
+          }
+          
+          // Refresh the grid
+          if (typeof gridApi.refreshHeader === 'function') {
+            gridApi.refreshHeader();
+          }
+          
+          if (typeof gridApi.refreshCells === 'function') {
+            gridApi.refreshCells({ 
+              force: true, 
+              columns: [columnField] 
+            });
+          }
+          
+          console.log(`Successfully applied settings to column ${columnField}`);
+          return true;
+        } catch (error) {
+          console.error('Error applying column settings:', error);
+          return false;
+        }
+      },
+
+      getColumnSettingsProfiles: () => {
+        const { settings } = get();
+        if (!settings.columnSettingsProfiles) {
+          return [];
+        }
+        
+        return Object.keys(settings.columnSettingsProfiles);
+      },
+
+      deleteColumnSettingsProfile: (profileName) => {
+        const { settings } = get();
+        if (!settings.columnSettingsProfiles || !settings.columnSettingsProfiles[profileName]) {
+          return;
+        }
+        
+        // Create a copy without the profile to delete
+        const updatedProfiles = { ...settings.columnSettingsProfiles };
+        delete updatedProfiles[profileName];
+        
+        // Update settings
+        set(state => ({
+          settings: {
+            ...state.settings,
+            columnSettingsProfiles: updatedProfiles
+          },
+          isDirty: true
+        }));
+        
+        // Save changes to profile
+        get().saveSettingsToProfile();
+        
+        console.log(`Deleted column settings profile ${profileName}`);
+      },
 
       // Utility functions for getting grid state
       getGridColumnState: () => {

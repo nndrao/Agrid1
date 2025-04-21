@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { ExpressionEditor } from '@/components/ExpressionEditor/ExpressionEditor';
-import { ColumnSettingsDialog } from '@/components/ColumnSettings/ColumnSettingsDialog';
+import { ColumnSettingsDialog } from '@/components/ColumnSettings/ColumnSettingsDialogRefactored';
 import { Column } from 'ag-grid-community';
 
 // Default values for fallbacks
@@ -101,26 +101,33 @@ export function DataTableToolbar() {
 
   // Initialize column list when the grid API is available
   useEffect(() => {
-    if (gridApi) {
+    if (gridApi && typeof gridApi.getAllDisplayedColumns === 'function') {
       try {
-        // Get all columns from grid API
-        const columns = gridApi.getAllDisplayedColumns();
-        if (columns && columns.length > 0) {
-          // Extract column fields
-          const fields = columns.map((col: Column) => col.getColId());
-          setColumnList(fields);
+        // Delay slightly to ensure grid is fully initialized
+        const timeoutId = setTimeout(() => {
+          if (!gridApi || !gridApi.getAllDisplayedColumns) return;
           
-          // Set first column as selected if we don't have one already
-          if (!selectedColumn || !fields.includes(selectedColumn)) {
-            setSelectedColumn(fields[0]);
+          // Get all columns from grid API
+          const columns = gridApi.getAllDisplayedColumns();
+          if (columns && columns.length > 0) {
+            // Extract column fields
+            const fields = columns.map((col: Column) => col.getColId());
+            setColumnList(fields);
+            
+            // Set first column as selected if we don't have one already
+            if (!selectedColumn || !fields.includes(selectedColumn)) {
+              setSelectedColumn(fields[0]);
+            }
           }
-        }
+        }, 300);
+        
+        return () => clearTimeout(timeoutId);
       } catch (error) {
         console.error('Error getting columns from grid API:', error);
       }
     }
-  // Only depend on gridApi changes, not on selectedColumn changes
-  }, [gridApi, selectedColumn ? '' : 'initialize']);
+  // Only depend on gridApi changes to prevent unnecessary re-renders
+  }, [gridApi, selectedColumn]);
 
   // Current active profile
   const activeProfile = getActiveProfile();

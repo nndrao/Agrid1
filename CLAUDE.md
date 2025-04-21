@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Development: `npm run dev` - Start Vite dev server
 - Linting: `npm run lint` - Run ESLint on the codebase
 - Preview: `npm run preview` - Preview the production build
+- Testing: `npx jest src/tests/gridStore.test.ts` - Run the gridStore test file
 
 ## Code Style Guidelines
 - **Imports**: Use absolute imports with `@/` alias for src directory paths
@@ -16,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Components**: Follow ShadCN/Radix UI patterns for UI components
 - **Styling**: Use Tailwind CSS with the `cn` utility for class merging
 - **Error Handling**: Use try/catch blocks for async operations
-- **State Management**: Prefer React hooks (useState, useCallback, useMemo)
+- **State Management**: Prefer React hooks (useState, useContext) and Zustand for global state
 - **File Structure**: Group related components in subdirectories
 - **AG Grid**: Use AG Grid Enterprise components for data tables
+- **Testing**: Use Jest for unit tests

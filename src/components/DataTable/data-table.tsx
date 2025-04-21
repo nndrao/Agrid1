@@ -64,24 +64,36 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   // We exclude fontSize and density as they're handled via CSS directly
   const { font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState } = settings || {};
 
-  // Use the column profiles hook to apply saved column settings
+  // Get applyAllProfiles function from hook - but don't wrap in useMemo to avoid React hook order issues
   const { applyAllProfiles } = useApplyColumnProfiles(gridApi);
-
-  useEffect(() => {
-    if (gridApi) {
-      // Only apply settings when properties that require grid refresh change
-      // This prevents unnecessary refreshes when saving profiles or changing fontSize/density
+  
+  // Only apply settings when grid API and essential properties change
+  const applySettings = useCallback(() => {
+    if (gridApi && gridApi.getColumn && typeof gridApi.getColumn === 'function') {
       console.log('Applying settings due to grid-related property change');
+      
+      // Apply settings to grid
       applySettingsToGrid();
 
-      // Apply all saved column profiles
-      setTimeout(() => {
-        applyAllProfiles();
-      }, 500);
+      // Apply all saved column profiles after a short delay
+      const timeoutId = setTimeout(() => {
+        console.log('Applying column profiles after settings change');
+        if (gridApi && gridApi.getColumn) {
+          applyAllProfiles();
+        }
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
     }
+  }, [gridApi, applySettingsToGrid, applyAllProfiles]);
+  
+  // Use effect to call the callback when settings change
+  useEffect(() => {
+    return applySettings();
   }, [
+    // Only include essential dependencies that should trigger a refresh
     font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState,
-    gridApi, applySettingsToGrid, applyAllProfiles
+    applySettings
   ]);
 
   function setDarkMode(enabled: boolean) {
@@ -121,16 +133,26 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     }
 
     try {
+      console.log('Grid API available in onGridReady');
+      
       // Set up grid API reference in the store
       setGridApi(params.api);
 
-      // Apply current settings to grid
+      // Apply current settings to grid - using a longer delay
+      // to ensure grid API is fully initialized and registered in store
       setTimeout(() => {
+        console.log('Applying grid settings after initialization');
         applySettingsToGrid();
 
-        // Apply all saved column profiles
-        applyAllProfiles();
-      }, 0);
+        // Apply all saved column profiles after a short delay
+        // This allows the grid API to be properly registered before applying profiles
+        setTimeout(() => {
+          console.log('Now applying column profiles');
+          if (params.api) {
+            applyAllProfiles();
+          }
+        }, 200);
+      }, 100);
 
       // Set initial focus to first cell
       setTimeout(() => {
@@ -140,7 +162,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
             params.api.setFocusedCell(0, columns[0].getColId());
           }
         }
-      }, 100);
+      }, 300);
     } catch (error) {
       console.error('Error in onGridReady:', error);
     }
