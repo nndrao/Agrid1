@@ -46,14 +46,42 @@ export const useApplyColumnProfiles = (gridApi: any) => {
         }
       });
 
-      // Refresh the grid
+      // Enhanced grid refresh to ensure styles are properly applied
+      console.log('Performing comprehensive grid refresh after applying all column profiles');
+      
+      // First refresh header
       if (typeof gridApi.refreshHeader === 'function') {
+        console.log('Refreshing grid headers');
         gridApi.refreshHeader();
       }
-
+      
+      // Then refresh all cells
       if (typeof gridApi.refreshCells === 'function') {
+        console.log('Refreshing all grid cells');
         gridApi.refreshCells({ force: true });
       }
+      
+      // Force a complete redraw of the grid for maximum style application
+      setTimeout(() => {
+        try {
+          if (gridApi) {
+            // Try multiple refresh methods for maximum effect
+            console.log('Performing deep grid refresh');
+            
+            if (typeof gridApi.redrawRows === 'function') {
+              console.log('Redrawing all rows');
+              gridApi.redrawRows();
+            }
+            
+            if (typeof gridApi.refreshView === 'function') {
+              console.log('Refreshing entire grid view');
+              gridApi.refreshView();
+            }
+          }
+        } catch (error) {
+          console.warn('Error during comprehensive grid refresh:', error);
+        }
+      }, 100);
 
       return true;
     } catch (error) {

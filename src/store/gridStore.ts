@@ -1199,9 +1199,12 @@ export const useGridStore = create<GridStore>()(
             }
           }
           
-          // Apply header styles
-          if (columnSettings.header && columnSettings.header.applyStyles) {
-            colDef.headerClass = `custom-header-${columnField}`;
+          // Apply header styles - ensure we're checking a boolean value with explicit comparison
+          if (columnSettings.header && columnSettings.header.applyStyles === true) {
+            console.log(`Applying header styles for column ${columnField} - header.applyStyles is ${columnSettings.header.applyStyles}`);
+            
+            // Don't use headerClass property as it can be inconsistent
+            // Instead, we'll apply styles directly via DOM after a small delay
             
             // Create CSS for the header
             let headerStyle = '';
@@ -1235,25 +1238,90 @@ export const useGridStore = create<GridStore>()(
             
             // Apply the header CSS
             if (headerStyle) {
+              console.log(`Header style for ${columnField}:`, headerStyle);
+              
+              // First approach: Create an ID-based stylesheet
               let styleElement = document.getElementById(`header-style-${columnField}`);
               if (!styleElement) {
                 styleElement = document.createElement('style');
                 styleElement.id = `header-style-${columnField}`;
                 document.head.appendChild(styleElement);
               }
-              styleElement.textContent = `.ag-header-cell.custom-header-${columnField}, .ag-header-cell[col-id="${columnField}"] { ${headerStyle} }`;
+              
+              // Use extremely specific selectors
+              const cssContent = `
+                /* AG Grid header styles for column ${columnField} */
+                .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+                .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
+                .ag-theme-quartz [col-id="${columnField}"].ag-header-cell,
+                .ag-theme-quartz-dark [col-id="${columnField}"].ag-header-cell,
+                div.ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+                div.ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
+                div.ag-theme-quartz [col-id="${columnField}"].ag-header-cell,
+                div.ag-theme-quartz-dark [col-id="${columnField}"].ag-header-cell,
+                .ag-theme-quartz [aria-colindex="${columnField}"].ag-header-cell,
+                .ag-theme-quartz-dark [aria-colindex="${columnField}"].ag-header-cell {
+                  ${headerStyle} !important;
+                }`;
+              
+              styleElement.textContent = cssContent;
+              console.log(`Applied CSS to stylesheet: ${cssContent}`);
+              
+              // Second approach: Direct DOM manipulation with a delay
+              setTimeout(() => {
+                try {
+                  // Find all header cells for this column and apply styles directly
+                  const headerCells = document.querySelectorAll(`.ag-header-cell[col-id="${columnField}"]`);
+                  console.log(`Found ${headerCells.length} header cells for column ${columnField}`);
+                  
+                  headerCells.forEach((cell) => {
+                    console.log(`Applying direct styles to header cell for ${columnField}`);
+                    
+                    // Apply each style property directly to the element
+                    if (header.fontFamily) cell.style.fontFamily = header.fontFamily;
+                    if (header.fontSize) cell.style.fontSize = header.fontSize;
+                    if (header.bold) cell.style.fontWeight = 'bold';
+                    if (header.italic) cell.style.fontStyle = 'italic';
+                    if (header.underline) cell.style.textDecoration = 'underline';
+                    if (header.textColor) cell.style.color = header.textColor;
+                    if (header.backgroundColor) cell.style.backgroundColor = header.backgroundColor;
+                    if (header.alignH) cell.style.textAlign = header.alignH;
+                    
+                    // Add data attribute to mark as styled
+                    cell.setAttribute('data-styled', 'true');
+                    cell.setAttribute('data-style-version', Date.now().toString());
+                  });
+                } catch (error) {
+                  console.error('Error directly applying header styles:', error);
+                }
+              }, 150);
             }
           } else {
             // Remove any existing header styles
+            console.log(`Removing header styles for column ${columnField}`);
             const styleElement = document.getElementById(`header-style-${columnField}`);
             if (styleElement) styleElement.remove();
             
-            if (colDef.headerClass) colDef.headerClass = undefined;
+            // Remove inline styles
+            setTimeout(() => {
+              try {
+                const headerCells = document.querySelectorAll(`.ag-header-cell[col-id="${columnField}"]`);
+                headerCells.forEach((cell) => {
+                  cell.removeAttribute('style');
+                  cell.removeAttribute('data-styled');
+                });
+              } catch (error) {
+                console.error('Error removing header styles:', error);
+              }
+            }, 150);
           }
           
-          // Apply cell styles
-          if (columnSettings.cell && columnSettings.cell.applyStyles) {
-            colDef.cellClass = `custom-cell-${columnField}`;
+          // Apply cell styles - ensure we're checking a boolean value with explicit comparison
+          if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
+            console.log(`Applying cell styles for column ${columnField} - cell.applyStyles is ${columnSettings.cell.applyStyles}`);
+            
+            // Don't use cellClass property as it can be inconsistent
+            // Instead, we'll apply styles directly via DOM after a small delay
             
             // Create CSS for the cells
             let cellStyle = '';
@@ -1285,35 +1353,210 @@ export const useGridStore = create<GridStore>()(
               }
             }
             
-            // Apply the cell CSS
+            // Apply the CSS
             if (cellStyle) {
+              console.log(`Cell style for ${columnField}:`, cellStyle);
+              
+              // First approach: Add a custom cellRenderer function to apply styles
+              colDef.cellRenderer = (params) => {
+                // Get original value
+                const originalValue = params.value;
+                
+                // Create wrapper element with inline styles
+                const cellElement = document.createElement('div');
+                cellElement.className = 'styled-cell';
+                cellElement.innerHTML = originalValue !== undefined && originalValue !== null ? originalValue : '';
+                
+                // Apply inline styles
+                Object.assign(cellElement.style, {
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  ...(cell.fontFamily && { fontFamily: cell.fontFamily }),
+                  ...(cell.fontSize && { fontSize: cell.fontSize }),
+                  ...(cell.bold && { fontWeight: 'bold' }),
+                  ...(cell.italic && { fontStyle: 'italic' }),
+                  ...(cell.underline && { textDecoration: 'underline' }),
+                  ...(cell.textColor && { color: cell.textColor }),
+                  ...(cell.backgroundColor && { backgroundColor: cell.backgroundColor }),
+                  ...(cell.alignH && { justifyContent: cell.alignH === 'right' ? 'flex-end' : cell.alignH === 'center' ? 'center' : 'flex-start' })
+                });
+                
+                return cellElement;
+              };
+              
+              // Second approach: Create an ID-based stylesheet for extra coverage
               let styleElement = document.getElementById(`cell-style-${columnField}`);
               if (!styleElement) {
                 styleElement = document.createElement('style');
                 styleElement.id = `cell-style-${columnField}`;
                 document.head.appendChild(styleElement);
               }
-              styleElement.textContent = `.ag-cell.custom-cell-${columnField}, .ag-cell[col-id="${columnField}"] { ${cellStyle} }`;
+              
+              // Use extremely specific selectors
+              const cssContent = `
+                /* AG Grid cell styles for column ${columnField} */
+                .ag-theme-quartz .ag-row .ag-cell[col-id="${columnField}"],
+                .ag-theme-quartz-dark .ag-row .ag-cell[col-id="${columnField}"],
+                .ag-theme-quartz [col-id="${columnField}"].ag-cell,
+                .ag-theme-quartz-dark [col-id="${columnField}"].ag-cell,
+                div.ag-theme-quartz .ag-row .ag-cell[col-id="${columnField}"],
+                div.ag-theme-quartz-dark .ag-row .ag-cell[col-id="${columnField}"] {
+                  ${cellStyle} !important;
+                }
+                
+                /* Target the cell directly */
+                .ag-theme-quartz [row-index][aria-colindex][col-id="${columnField}"],
+                .ag-theme-quartz-dark [row-index][aria-colindex][col-id="${columnField}"] {
+                  ${cellStyle} !important;
+                }`;
+              
+              styleElement.textContent = cssContent;
+              console.log(`Applied CSS to cell stylesheet: ${cssContent}`);
+              
+              // Third approach: Direct DOM manipulation with a mutation observer
+              // Create a mutation observer to watch for new cell elements
+              setTimeout(() => {
+                try {
+                  console.log(`Setting up mutation observer for column ${columnField} cell styling`);
+                  
+                  // First, try to apply styles to all existing cells
+                  const cellElements = document.querySelectorAll(`.ag-row .ag-cell[col-id="${columnField}"]`);
+                  console.log(`Found ${cellElements.length} cell elements for column ${columnField}`);
+                  
+                  cellElements.forEach(cellElement => {
+                    // Apply styles directly to the cell element
+                    if (cell.fontFamily) cellElement.style.fontFamily = cell.fontFamily;
+                    if (cell.fontSize) cellElement.style.fontSize = cell.fontSize;
+                    if (cell.bold) cellElement.style.fontWeight = 'bold';
+                    if (cell.italic) cellElement.style.fontStyle = 'italic';
+                    if (cell.underline) cellElement.style.textDecoration = 'underline';
+                    if (cell.textColor) cellElement.style.color = cell.textColor;
+                    if (cell.backgroundColor) cellElement.style.backgroundColor = cell.backgroundColor;
+                    if (cell.alignH) cellElement.style.textAlign = cell.alignH;
+                    
+                    // Mark as styled
+                    cellElement.setAttribute('data-styled', 'true');
+                    cellElement.setAttribute('data-style-version', Date.now().toString());
+                  });
+                  
+                  // Set up observer to catch new cells as they're rendered
+                  const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                      if (mutation.type === 'childList') {
+                        mutation.addedNodes.forEach((node) => {
+                          if (node.nodeType === 1) { // Element node
+                            // Check if it's a cell for our column
+                            const cellElements = (node as Element).querySelectorAll 
+                              ? (node as Element).querySelectorAll(`.ag-cell[col-id="${columnField}"]`)
+                              : [];
+                            
+                            // Apply styles to each matching cell
+                            cellElements.forEach(cellElement => {
+                              if (!cellElement.hasAttribute('data-styled')) {
+                                if (cell.fontFamily) cellElement.style.fontFamily = cell.fontFamily;
+                                if (cell.fontSize) cellElement.style.fontSize = cell.fontSize;
+                                if (cell.bold) cellElement.style.fontWeight = 'bold';
+                                if (cell.italic) cellElement.style.fontStyle = 'italic';
+                                if (cell.underline) cellElement.style.textDecoration = 'underline';
+                                if (cell.textColor) cellElement.style.color = cell.textColor;
+                                if (cell.backgroundColor) cellElement.style.backgroundColor = cell.backgroundColor;
+                                if (cell.alignH) cellElement.style.textAlign = cell.alignH;
+                                
+                                cellElement.setAttribute('data-styled', 'true');
+                                cellElement.setAttribute('data-style-version', Date.now().toString());
+                              }
+                            });
+                          }
+                        });
+                      }
+                    });
+                  });
+                  
+                  // Start observing the grid container
+                  const gridElement = document.querySelector('.ag-theme-quartz');
+                  if (gridElement) {
+                    observer.observe(gridElement, { childList: true, subtree: true });
+                    
+                    // Store observer in a global array for cleanup
+                    window['cellStyleObservers'] = window['cellStyleObservers'] || {};
+                    
+                    // Clean up any existing observer for this column
+                    if (window['cellStyleObservers'][columnField]) {
+                      window['cellStyleObservers'][columnField].disconnect();
+                    }
+                    
+                    // Store the new observer
+                    window['cellStyleObservers'][columnField] = observer;
+                  }
+                } catch (error) {
+                  console.error('Error setting up cell style mutation observer:', error);
+                }
+              }, 200);
             }
           } else {
             // Remove any existing cell styles
+            console.log(`Removing cell styles for column ${columnField}`);
+            
+            // Remove custom renderer if it exists
+            if (colDef.cellRenderer) {
+              colDef.cellRenderer = undefined;
+            }
+            
+            // Remove stylesheet
             const styleElement = document.getElementById(`cell-style-${columnField}`);
             if (styleElement) styleElement.remove();
             
-            if (colDef.cellClass) colDef.cellClass = undefined;
+            // Disconnect observer if it exists
+            if (window['cellStyleObservers'] && window['cellStyleObservers'][columnField]) {
+              window['cellStyleObservers'][columnField].disconnect();
+              delete window['cellStyleObservers'][columnField];
+            }
+            
+            // Remove inline styles with a delay
+            setTimeout(() => {
+              try {
+                const cellElements = document.querySelectorAll(`.ag-row .ag-cell[col-id="${columnField}"]`);
+                cellElements.forEach((cell) => {
+                  cell.removeAttribute('style');
+                  cell.removeAttribute('data-styled');
+                });
+              } catch (error) {
+                console.error('Error removing cell styles:', error);
+              }
+            }, 150);
           }
           
-          // Refresh the grid
+          // Refresh the grid with a more comprehensive approach
+          console.log(`Refreshing grid after applying styles to column ${columnField}`);
+          
+          // First refresh header
           if (typeof gridApi.refreshHeader === 'function') {
+            console.log('Refreshing grid headers');
             gridApi.refreshHeader();
           }
           
+          // Then refresh cells
           if (typeof gridApi.refreshCells === 'function') {
+            console.log(`Refreshing cells for column ${columnField}`);
             gridApi.refreshCells({ 
               force: true, 
               columns: [columnField] 
             });
           }
+          
+          // For safety, trigger a full grid refresh with a small delay
+          setTimeout(() => {
+            try {
+              if (gridApi && typeof gridApi.redrawRows === 'function') {
+                console.log('Performing complete grid redraw to ensure styles are applied');
+                gridApi.redrawRows();
+              }
+            } catch (error) {
+              console.warn('Error during grid redraw:', error);
+            }
+          }, 50);
           
           console.log(`Successfully applied settings to column ${columnField}`);
           return true;

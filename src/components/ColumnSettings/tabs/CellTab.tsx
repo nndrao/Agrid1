@@ -29,7 +29,18 @@ export const CellTab: React.FC<CellTabProps> = ({ settings, onUpdate }) => {
         <Checkbox
           id="apply-cell-styles"
           checked={settings.applyStyles}
-          onCheckedChange={(checked) => handleUpdate({ applyStyles: checked === true })}
+          onCheckedChange={(checked) => {
+            // CRITICAL: Most important fix - ensure the checkbox state is properly passed as a true boolean
+            // This is critical because the grid styling depends on this being a true boolean value
+            const applyStyles = checked === true;
+            console.log(`Setting cell.applyStyles to ${applyStyles} (${typeof applyStyles})`);
+            console.log(`Original checked value was: ${checked} (${typeof checked})`);
+            
+            // We use a direct object with spread to ensure we pass a plain object with a boolean property
+            const updateObj = { applyStyles };
+            console.log('Cell style update object:', updateObj);
+            handleUpdate(updateObj);
+          }}
         />
         <Label htmlFor="apply-cell-styles" className="text-sm font-medium cursor-pointer">
           Apply these styles to the grid cells

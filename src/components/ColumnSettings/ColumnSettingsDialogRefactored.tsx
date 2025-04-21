@@ -52,7 +52,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
         console.log(`Loaded settings for column ${selectedColumn} from grid store`);
         setState(settings);
       } else {
-        // If no settings, create default state
+        // If no settings, create default state with explicit boolean values
         console.log(`No settings found for column ${selectedColumn}, using defaults`);
         setState({
           general: {
@@ -68,6 +68,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
             editable: true,
           },
           header: {
+            // CRITICAL: Ensure this is an explicit boolean
             applyStyles: false,
             fontFamily: 'Arial',
             fontSize: '14px',
@@ -84,7 +85,8 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
             borderSides: 'All',
           },
           cell: {
-            applyStyles: false,
+            // CRITICAL: Ensure this is an explicit boolean
+            applyStyles: false, 
             fontFamily: 'Arial',
             fontSize: '14px',
             fontWeight: 'Normal',
@@ -145,8 +147,34 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
     console.log('Applying changes to grid for column:', selectedColumn);
     
     try {
+      // Ensure the applyStyles values are explicitly boolean before saving
+      const sanitizedState = {
+        ...state,
+        header: {
+          ...state.header,
+          applyStyles: state.header.applyStyles === true,
+          bold: state.header.bold === true,
+          italic: state.header.italic === true,
+          underline: state.header.underline === true
+        },
+        cell: {
+          ...state.cell,
+          applyStyles: state.cell.applyStyles === true,
+          bold: state.cell.bold === true,
+          italic: state.cell.italic === true,
+          underline: state.cell.underline === true
+        }
+      };
+      
+      console.log('Sanitized state before saving:', {
+        headerApplyStyles: sanitizedState.header.applyStyles,
+        headerApplyStylesType: typeof sanitizedState.header.applyStyles,
+        cellApplyStyles: sanitizedState.cell.applyStyles,
+        cellApplyStylesType: typeof sanitizedState.cell.applyStyles
+      });
+      
       // Save settings to grid store
-      gridStore.saveColumnSettings(selectedColumn, state);
+      gridStore.saveColumnSettings(selectedColumn, sanitizedState);
       
       // Apply settings to grid
       gridStore.applyColumnSettings(selectedColumn);
