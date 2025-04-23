@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { GeneralTab } from './tabs/GeneralTab';
 import { HeaderTab } from './tabs/HeaderTab';
@@ -24,87 +24,38 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
   selectedColumn
 }) => {
   const [activeTab, setActiveTab] = useState("general");
-  const [localState, setLocalState] = useState<ColumnSettingsState>(state);
 
-  // We don't need the prevStateRef anymore - removing it
-  
-  // Track previous state with ref to avoid circular dependencies
-  const prevStateRef = useRef(state);
-  
-  // Update local state when props change using a safer approach
+  // Update local state only when the parent state changes
+  // We don't need a separate local state that duplicates the parent state
+  // Instead, we'll use the parent state directly
   useEffect(() => {
-    console.log('TabsWrapper: state prop changed', state);
-    
-    // Create a safe shallow copy that won't cause JSON issues
-    const safeState = {
-      general: { ...state.general },
-      header: { ...state.header },
-      cell: { ...state.cell }
-    };
-    
-    // Always update to ensure consistency, avoiding comparison issues
-    setLocalState(safeState);
-    
-    // Update ref for future reference
-    prevStateRef.current = state;
-    
-  }, [state]); // Remove localState dependency to break the cycle
+    if (process.env.NODE_ENV === 'development') {
+      console.log('TabsWrapper: state prop changed', state);
+    }
+  }, [state]);
 
   // Create wrapper functions for updates - memoized to prevent unnecessary rerenders
-  const handleUpdateGeneral = React.useCallback((updates: Partial<ColumnSettingsState['general']>) => {
-    console.log('TabsWrapper: handleUpdateGeneral', updates);
-    
-    // Update the parent first without conditional checks
+  // These functions now only update the parent state and don't maintain a duplicate local state
+  const handleUpdateGeneral = useCallback((updates: Partial<ColumnSettingsState['general']>) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('TabsWrapper: handleUpdateGeneral', updates);
+    }
     updateGeneral(updates);
-    
-    // Update local state with a safer approach
-    setLocalState(prev => {
-      return {
-        ...prev,
-        general: {
-          ...prev.general,
-          ...updates
-        }
-      };
-    });
-    
-  }, [updateGeneral]); // Remove localState from dependencies
+  }, [updateGeneral]);
 
-  const handleUpdateHeader = React.useCallback((updates: Partial<ColumnSettingsState['header']>) => {
-    console.log('TabsWrapper: handleUpdateHeader', updates);
-    
-    // Update parent state first
+  const handleUpdateHeader = useCallback((updates: Partial<ColumnSettingsState['header']>) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('TabsWrapper: handleUpdateHeader', updates);
+    }
     updateHeader(updates);
-    
-    // Update local state with a safer approach
-    setLocalState(prev => {
-      return {
-        ...prev,
-        header: {
-          ...prev.header,
-          ...updates
-        }
-      };
-    });
-  }, [updateHeader]); // Remove localState from dependencies
+  }, [updateHeader]);
 
-  const handleUpdateCell = React.useCallback((updates: Partial<ColumnSettingsState['cell']>) => {
-    console.log('TabsWrapper: handleUpdateCell', updates);
-    
-    // Update parent state first
+  const handleUpdateCell = useCallback((updates: Partial<ColumnSettingsState['cell']>) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('TabsWrapper: handleUpdateCell', updates);
+    }
     updateCell(updates);
-    
-    // Update local state with a safer approach
-    setLocalState(prev => {
-      return {
-        ...prev,
-        cell: {
-          ...prev.cell,
-          ...updates
-        }
-      };
-    });
-  }, [updateCell]); // Remove localState from dependencies
+  }, [updateCell]);
 
   return (
     <Tabs
@@ -130,7 +81,7 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <GeneralTab
-          settings={localState.general}
+          settings={state.general}
           onUpdate={handleUpdateGeneral}
           selectedColumn={selectedColumn}
         />
@@ -144,7 +95,7 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <HeaderTab
-          settings={localState.header}
+          settings={state.header}
           onUpdate={handleUpdateHeader}
         />
       </TabsContent>
@@ -157,7 +108,7 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <CellTab
-          settings={localState.cell}
+          settings={state.cell}
           onUpdate={handleUpdateCell}
         />
       </TabsContent>

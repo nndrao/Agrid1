@@ -99,52 +99,59 @@ export function DataTableToolbar() {
     importProfile
   } = useGridStore();
 
-  // Initialize column list when the grid API is available - no setTimeout
+  // Initialize column list when the grid API is available - optimized to reduce re-renders
   useEffect(() => {
-    if (gridApi && typeof gridApi.getAllDisplayedColumns === 'function') {
-      try {
-        // Add safety check for API
-        if (!gridApi.getAllDisplayedColumns) {
-          console.warn('getAllDisplayedColumns method not available on gridApi');
-          return;
-        }
-        
-        // Get all columns from grid API directly
-        const columns = gridApi.getAllDisplayedColumns();
-        if (columns && columns.length > 0) {
-          // Extract column fields
-          const fields = columns.map((col: Column) => col.getColId());
-          
-          // Only update if columns have changed
-          if (fields.length !== columnList.length || 
-              !fields.every((field, i) => columnList[i] === field)) {
-            console.log('Updating column list - found', fields.length, 'columns');
-            setColumnList(fields);
-            
-            // Set first column as selected if we don't have one already
-            if (!selectedColumn || !fields.includes(selectedColumn)) {
-              setSelectedColumn(fields[0]);
-            }
-          }
-        } else {
+    if (!gridApi || typeof gridApi.getAllDisplayedColumns !== 'function') {
+      return;
+    }
+
+    try {
+      // Get all columns from grid API directly
+      const columns = gridApi.getAllDisplayedColumns();
+      if (!columns || columns.length === 0) {
+        if (process.env.NODE_ENV === 'development') {
           console.log('No columns returned from getAllDisplayedColumns');
         }
-      } catch (error) {
-        console.error('Error getting columns from grid API:', error);
+        return;
       }
+
+      // Extract column fields
+      const fields = columns.map((col: Column) => col.getColId());
+
+      // Use functional update to avoid dependency on columnList
+      setColumnList(prevList => {
+        // Only update if columns have changed
+        if (fields.length !== prevList.length ||
+            !fields.every((field: string, i: number) => prevList[i] === field)) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Updating column list - found', fields.length, 'columns');
+          }
+
+          // Update selected column if needed
+          if (!selectedColumn || !fields.includes(selectedColumn)) {
+            setSelectedColumn(fields[0]);
+          }
+
+          return fields;
+        }
+        return prevList;
+      });
+    } catch (error) {
+      console.error('Error getting columns from grid API:', error);
     }
   // Only depend on gridApi changes to prevent unnecessary re-renders
-  }, [gridApi, selectedColumn, columnList]);
+  }, [gridApi, selectedColumn]);
 
   // Current active profile
   const activeProfile = getActiveProfile();
 
-  // Log for debugging
-  console.log("Current settings in toolbar:", {
-    settings,
-    fontSize: settings?.fontSize,
-    density: settings?.density
-  });
+  // Log for debugging only in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log("Current settings in toolbar:", {
+      fontSize: settings?.fontSize,
+      density: settings?.density
+    });
+  }
 
   // Ensure activeProfile has default values if somehow missing
   if (!activeProfile) {
@@ -222,46 +229,51 @@ export function DataTableToolbar() {
   const [localFontSize, setLocalFontSize] = useState(settings?.fontSize || defaultFontSize);
   const [localDensity, setLocalDensity] = useState(settings?.density || defaultDensity);
 
-  // Sync local state with settings when they change
-  useEffect(() => {
-    if (settings?.fontSize) {
-      setLocalFontSize(settings.fontSize);
-      // Also apply CSS directly when settings change (e.g., when switching profiles)
-      document.documentElement.style.setProperty('--ag-font-size', `${settings.fontSize}px`);
+  // Memoize the CSS update function to avoid recreating it on every render
+  const updateCssVariables = useCallback((fontSize?: number, density?: number) => {
+    // Update font size CSS variable
+    if (fontSize !== undefined) {
+      document.documentElement.style.setProperty('--ag-font-size', `${fontSize}px`);
     }
 
-    if (settings?.density) {
-      setLocalDensity(settings.density);
-      // Also apply density CSS directly when settings change
-      const spacingValue = 4 + (settings.density - 1) * 4;
+    // Update density CSS variables
+    if (density !== undefined) {
+      const spacingValue = 4 + (density - 1) * 4;
       document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
       document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
       document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
       document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
       document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
     }
-  }, [settings?.fontSize, settings?.density]);
+  }, []);
 
-  // Update a single setting with debounce
+  // Sync local state with settings when they change
+  useEffect(() => {
+    // Update local state for font size
+    if (settings?.fontSize !== undefined) {
+      setLocalFontSize(settings.fontSize);
+    }
+
+    // Update local state for density
+    if (settings?.density !== undefined) {
+      setLocalDensity(settings.density);
+    }
+
+    // Apply CSS variables in a single batch
+    updateCssVariables(settings?.fontSize, settings?.density);
+  }, [settings?.fontSize, settings?.density, updateCssVariables]);
+
+  // Update a single setting with debounce - optimized to reduce duplicate code
   const handleUpdateSetting = useCallback((key: string, value: string | number | boolean | { name: string; value: string }) => {
     // Update local state for immediate UI feedback
     if (key === 'fontSize') {
       setLocalFontSize(value as number);
+      // Update CSS for font size
+      updateCssVariables(value as number, undefined);
     } else if (key === 'density') {
       setLocalDensity(value as number);
-    }
-
-    // For CSS-only properties, apply changes immediately to DOM
-    if (key === 'fontSize') {
-      document.documentElement.style.setProperty('--ag-font-size', `${value}px`);
-    } else if (key === 'density') {
-      const spacingValue = 4 + ((value as number) - 1) * 4;
-      // Apply density (convert density value to spacing pixels)
-      document.documentElement.style.setProperty('--ag-grid-size', `${spacingValue}px`);
-      document.documentElement.style.setProperty('--ag-list-item-height', `${spacingValue * 6}px`);
-      document.documentElement.style.setProperty('--ag-row-height', `${spacingValue * 6}px`);
-      document.documentElement.style.setProperty('--ag-header-height', `${spacingValue * 7}px`);
-      document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
+      // Update CSS for density
+      updateCssVariables(undefined, value as number);
     }
 
     // Clear any existing timer
@@ -273,9 +285,11 @@ export function DataTableToolbar() {
     debounceTimers.current[key] = window.setTimeout(() => {
       // Only update the store after a delay to prevent excessive renders
       updateSettings({ [key]: value });
-      console.log(`Updated setting in store: ${key} = ${value}`);
-    }, 100); // 100ms debounce
-  }, [updateSettings]);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Updated setting in store: ${key} = ${value}`);
+      }
+    }, 200); // 200ms debounce for better performance
+  }, [updateSettings, updateCssVariables]);
 
   // Get display name for density value
   const getDensityLabel = (densityValue: number): string => {

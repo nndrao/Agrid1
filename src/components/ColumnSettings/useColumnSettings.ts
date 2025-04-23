@@ -70,19 +70,46 @@ export interface ColumnSettingsState {
 export const useColumnSettings = (initialColumn: string) => {
   const { gridApi } = useGridStore();
 
+  // Cache for profiles to avoid repeated localStorage access
+  const profilesCache = useRef<Record<string, any> | null>(null);
+
+  // Function to get profiles from cache or localStorage
+  const getProfiles = useCallback(() => {
+    // Return cached profiles if available
+    if (profilesCache.current !== null) {
+      return profilesCache.current;
+    }
+
+    try {
+      // Get profiles from localStorage
+      const profilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
+      const profiles = JSON.parse(profilesJson);
+
+      // Cache the profiles
+      profilesCache.current = profiles;
+
+      return profiles;
+    } catch (error) {
+      console.error('Error getting profiles:', error);
+      return {};
+    }
+  }, []);
+
   // Get initial state based on the column definition from the grid
   const getInitialState = useCallback((columnField: string): ColumnSettingsState => {
     // Check if there's a saved profile for this column
     try {
-      const savedProfilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
-      const savedProfiles = JSON.parse(savedProfilesJson);
+      // Get profiles from cache or localStorage
+      const savedProfiles = getProfiles();
 
       // Look for a profile with the column name
       const profileName = `${columnField}_settings`;
 
       if (savedProfiles[profileName]) {
-        console.log(`Found saved profile for column ${columnField}:`, savedProfiles[profileName]);
-        
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Found saved profile for column ${columnField}:`, savedProfiles[profileName]);
+        }
+
         // Create a clean copy to avoid circular references
         const profile = savedProfiles[profileName];
         return {
@@ -200,13 +227,13 @@ export const useColumnSettings = (initialColumn: string) => {
 
   // Use a ref to track the current column name to avoid unnecessary state updates
   const currentColumnRef = useRef<string>(initialColumn);
-  
+
   // Track whether we've initialized the state for a given column to avoid redundant resets
   const hasInitializedRef = useRef<Record<string, boolean>>({});
-  
+
   // Track whether the state update was triggered internally to avoid circular updates
   const internalUpdateRef = useRef<boolean>(false);
-  
+
   const [state, setState] = useState<ColumnSettingsState>(() => {
     // Mark initialColumn as initialized
     hasInitializedRef.current[initialColumn] = true;
@@ -218,17 +245,38 @@ export const useColumnSettings = (initialColumn: string) => {
     section: K,
     updates: Partial<ColumnSettingsState[K]>
   ) => {
-    console.log(`Updating ${section} section with:`, updates);
-    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Updating ${section} section with:`, updates);
+    }
+
     // Skip if we're in the middle of an internal reset operation
     if (internalUpdateRef.current) {
-      console.log('Skipping update during column reset');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Skipping update during column reset');
+      }
       return;
     }
-    
-    // Simplify the update logic to avoid deep comparisons
+
+    // Use a function to update state to ensure we're working with the latest state
     setState(prev => {
-      // Always create a new reference to avoid circular updates
+      // Check if the updates are actually different from current state
+      let hasChanges = false;
+      const currentSectionState = prev[section];
+
+      // Check each property in updates to see if it's different
+      for (const key in updates) {
+        if (updates[key] !== currentSectionState[key]) {
+          hasChanges = true;
+          break;
+        }
+      }
+
+      // If nothing changed, return the previous state to avoid re-renders
+      if (!hasChanges) {
+        return prev;
+      }
+
+      // Create a new state object with the updates
       const result = {
         ...prev,
         [section]: {
@@ -236,17 +284,18 @@ export const useColumnSettings = (initialColumn: string) => {
           ...updates
         }
       };
-      
+
       // Special handling for headerName updates to keep column tracking in sync
       if (section === 'general' && 'headerName' in updates && updates.headerName) {
-        // This is critical - update our ref to match the new headerName
-        // to avoid circular rendering with resetForColumn
+        // Update our ref to match the new headerName to avoid circular rendering
         if (updates.headerName !== currentColumnRef.current) {
-          console.log(`Updating internal column reference to: ${updates.headerName}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Updating internal column reference to: ${updates.headerName}`);
+          }
           currentColumnRef.current = updates.headerName as string;
         }
       }
-      
+
       return result;
     });
   }, []);
@@ -254,7 +303,7 @@ export const useColumnSettings = (initialColumn: string) => {
   // Update general settings
   const updateGeneral = useCallback((updates: Partial<ColumnSettingsState['general']>) => {
     console.log('updateGeneral called with:', updates);
-    
+
     // Directly use the updateSection function to maintain consistency
     updateSection('general', updates);
   }, [updateSection]);
@@ -276,87 +325,87 @@ export const useColumnSettings = (initialColumn: string) => {
       console.log('Empty column name, skipping reset');
       return;
     }
-    
+
     // Get current column from the ref
     const currentColumn = currentColumnRef.current;
-    
+
     // Skip if trying to reset to the same column that's already loaded
     if (currentColumn === columnName) {
       console.log('Column already selected, skipping reset:', columnName);
       return;
     }
-    
+
     // Check if we've already initialized this column before
     if (hasInitializedRef.current[columnName]) {
       console.log(`Column ${columnName} was previously initialized, using cached state`);
       // We'll still reset, but we know this shouldn't cause a circular update
     }
-    
+
     console.log(`Resetting column from ${currentColumn} to ${columnName}`);
-    
+
     // Set the flag to indicate we're doing an internal update
     internalUpdateRef.current = true;
-    
+
     // Update the ref FIRST before any state changes
     currentColumnRef.current = columnName;
-    
+
     // Mark this column as initialized
     hasInitializedRef.current[columnName] = true;
-    
+
     try {
       // Get fresh initial state for the column
       const newState = getInitialState(columnName);
-      
+
       // Set state with the new initial state
       setState(newState);
     } catch (error) {
       console.error('Error getting initial state for column:', error);
-      
+
       // Fallback to a basic default state
       setState({
-        general: { 
-          headerName: columnName, 
-          width: '120', 
-          columnType: 'Default', 
-          pinnedPosition: 'Not pinned', 
-          filter: 'Enabled', 
-          filterType: 'Auto', 
-          sortable: true, 
-          resizable: true, 
-          hidden: false, 
-          editable: true 
+        general: {
+          headerName: columnName,
+          width: '120',
+          columnType: 'Default',
+          pinnedPosition: 'Not pinned',
+          filter: 'Enabled',
+          filterType: 'Auto',
+          sortable: true,
+          resizable: true,
+          hidden: false,
+          editable: true
         },
-        header: { 
-          applyStyles: false, 
-          fontFamily: 'Arial', 
-          fontSize: '14px', 
-          fontWeight: 'Normal', 
-          bold: false, 
-          italic: false, 
-          underline: false, 
-          textColor: '#000000', 
-          backgroundColor: '#FFFFFF', 
-          alignH: 'left', 
-          borderStyle: 'Solid', 
-          borderWidth: 1, 
-          borderColor: '#000000', 
-          borderSides: 'All' 
+        header: {
+          applyStyles: false,
+          fontFamily: 'Arial',
+          fontSize: '14px',
+          fontWeight: 'Normal',
+          bold: false,
+          italic: false,
+          underline: false,
+          textColor: '#000000',
+          backgroundColor: '#FFFFFF',
+          alignH: 'left',
+          borderStyle: 'Solid',
+          borderWidth: 1,
+          borderColor: '#000000',
+          borderSides: 'All'
         },
-        cell: { 
-          applyStyles: false, 
-          fontFamily: 'Arial', 
-          fontSize: '14px', 
-          fontWeight: 'Normal', 
-          bold: false, 
-          italic: false, 
-          underline: false, 
-          textColor: '#000000', 
-          backgroundColor: '#FFFFFF', 
-          alignH: 'left', 
-          borderStyle: 'Solid', 
-          borderWidth: 1, 
-          borderColor: '#000000', 
-          borderSides: 'All' 
+        cell: {
+          applyStyles: false,
+          fontFamily: 'Arial',
+          fontSize: '14px',
+          fontWeight: 'Normal',
+          bold: false,
+          italic: false,
+          underline: false,
+          textColor: '#000000',
+          backgroundColor: '#FFFFFF',
+          alignH: 'left',
+          borderStyle: 'Solid',
+          borderWidth: 1,
+          borderColor: '#000000',
+          borderSides: 'All'
         }
       });
     } finally {
@@ -371,10 +420,10 @@ export const useColumnSettings = (initialColumn: string) => {
   const applySettingsToGrid = useCallback((columnField: string) => {
     // Use the store's implementation instead of duplicating code
     const { applyColumnSettings } = useGridStore.getState();
-    
+
     // Save the column settings first
     saveProfile(`${columnField}_settings`);
-    
+
     // Then apply them
     return applyColumnSettings(columnField);
   }, []);
@@ -382,9 +431,8 @@ export const useColumnSettings = (initialColumn: string) => {
   // Save current settings to a profile
   const saveProfile = useCallback((profileName: string) => {
     try {
-      // Get all existing profiles
-      const profilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
-      const profiles = JSON.parse(profilesJson);
+      // Get all existing profiles from cache
+      const profiles = getProfiles();
 
       // Create a safe copy of the state - using spread to avoid circular references
       const stateCopy = {
@@ -396,11 +444,16 @@ export const useColumnSettings = (initialColumn: string) => {
       // Add or update the profile
       profiles[profileName] = stateCopy;
 
-      console.log(`Saved profile '${profileName}':`, stateCopy);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Saved profile '${profileName}':`, stateCopy);
+      }
+
+      // Update the cache
+      profilesCache.current = profiles;
 
       // Save back to localStorage
       localStorage.setItem('columnSettingsProfiles', JSON.stringify(profiles));
-      
+
       // Also save to store
       if (profileName.endsWith('_settings')) {
         const columnField = profileName.replace('_settings', '');
@@ -412,14 +465,13 @@ export const useColumnSettings = (initialColumn: string) => {
       console.error('Error saving profile:', error);
       return false;
     }
-  }, [state]);
+  }, [state, getProfiles]);
 
   // Load settings from a profile
   const loadProfile = useCallback((profileName: string) => {
     try {
-      // Get all existing profiles
-      const profilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
-      const profiles = JSON.parse(profilesJson);
+      // Get all existing profiles from cache
+      const profiles = getProfiles();
 
       // Check if profile exists
       if (!profiles[profileName]) {
@@ -427,8 +479,9 @@ export const useColumnSettings = (initialColumn: string) => {
         return false;
       }
 
-      // Load the profile
-      console.log(`Loading profile '${profileName}':`, profiles[profileName]);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Loading profile '${profileName}':`, profiles[profileName]);
+      }
 
       // Create a safe copy to avoid reference issues
       const profile = profiles[profileName];
@@ -438,41 +491,52 @@ export const useColumnSettings = (initialColumn: string) => {
         cell: {...profile.cell}
       };
 
-      console.log('Setting state to profile:', profileCopy);
+      // Set internal update flag to prevent circular updates
+      internalUpdateRef.current = true;
+
+      // Update state with the profile
       setState(profileCopy);
+
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        internalUpdateRef.current = false;
+      }, 0);
 
       return true;
     } catch (error) {
       console.error('Error loading profile:', error);
       return false;
     }
-  }, []);
+  }, [getProfiles]);
 
-  // Get all available profiles
-  const getProfiles = useCallback(() => {
+  // Get all available profile keys
+  const getProfileKeys = useCallback(() => {
     try {
-      // Get all existing profiles
-      const profilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
-      const profiles = JSON.parse(profilesJson);
+      // Get all existing profiles from cache
+      const profiles = getProfiles();
 
       const profileKeys = Object.keys(profiles);
-      console.log('Available profiles:', profileKeys);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Available profiles:', profileKeys);
+      }
       return profileKeys;
     } catch (error) {
-      console.error('Error getting profiles:', error);
+      console.error('Error getting profile keys:', error);
       return [];
     }
-  }, []);
+  }, [getProfiles]);
 
   // Delete a profile
   const deleteProfile = useCallback((profileName: string) => {
     try {
-      // Get all existing profiles
-      const profilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
-      const profiles = JSON.parse(profilesJson);
+      // Get all existing profiles from cache
+      const profiles = getProfiles();
 
       // Delete the profile
       delete profiles[profileName];
+
+      // Update the cache
+      profilesCache.current = profiles;
 
       // Save back to localStorage
       localStorage.setItem('columnSettingsProfiles', JSON.stringify(profiles));
@@ -488,7 +552,7 @@ export const useColumnSettings = (initialColumn: string) => {
       console.error('Error deleting profile:', error);
       return false;
     }
-  }, []);
+  }, [getProfiles]);
 
   return {
     state,
@@ -499,7 +563,7 @@ export const useColumnSettings = (initialColumn: string) => {
     applySettingsToGrid,
     saveProfile,
     loadProfile,
-    getProfiles,
+    getProfiles: getProfileKeys,
     deleteProfile
   };
 };

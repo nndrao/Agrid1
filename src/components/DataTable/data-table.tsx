@@ -48,12 +48,22 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     return generateColumnDefs(data);
   }, [data]);
 
+  // Memoize the theme mode to avoid unnecessary re-renders
+  const isDarkMode = useMemo(() => currentTheme === 'dark', [currentTheme]);
+
   // Initialize the grid theme when the theme or font changes
   useEffect(() => {
-    const isDarkMode = currentTheme === 'dark';
+    // Set the theme mode on the body element
     document.body.dataset.agThemeMode = isDarkMode ? 'dark' : 'light';
-    setGridTheme(createGridTheme(settings?.font?.value || defaultFontValue));
-  }, [currentTheme, settings?.font, defaultFontValue]);
+
+    // Create a new grid theme with the current font
+    const fontValue = settings?.font?.value || defaultFontValue;
+    setGridTheme(createGridTheme(fontValue));
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Grid theme updated:', { isDarkMode, fontValue });
+    }
+  }, [isDarkMode, settings?.font?.value, defaultFontValue]);
 
   // Initialize the store once on component mount
   useEffect(() => {
@@ -62,51 +72,68 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
 
   // Get applyAllProfiles function from hook
   const { applyAllProfiles } = useApplyColumnProfiles(gridApi);
-  
+
   // Memoize the settings update function to reduce rerenders
   const applyGridSettings = useCallback(() => {
-    if (gridApi && typeof gridApi.getColumn === 'function') {
+    if (!gridApi || typeof gridApi.getColumn !== 'function') {
+      return;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
       console.log('Applying settings and profiles in batch');
-      
-      // Apply settings once with all changes batched
-      applySettingsToGrid();
-      
-      // Apply profiles without additional timeouts
-      applyAllProfiles();
     }
+
+    // Apply settings once with all changes batched
+    applySettingsToGrid();
+
+    // Apply profiles without additional timeouts
+    applyAllProfiles();
   }, [gridApi, applySettingsToGrid, applyAllProfiles]);
-  
-  // Apply settings only when individual critical settings change
+
+  // Apply font family CSS variable directly without triggering grid refresh
   useEffect(() => {
-    if (gridApi && settings?.font) {
+    if (settings?.font?.value) {
       // Only update the font family setting - less expensive operation
-      document.documentElement.style.setProperty('--ag-font-family', settings.font.value || "'JetBrains Mono', monospace");
+      document.documentElement.style.setProperty('--ag-font-family', settings.font.value);
     }
-  }, [gridApi, settings?.font]);
-  
-  // Handle grid state settings separately with less frequent updates
+  }, [settings?.font?.value]);
+
+  // Combine grid state settings into a single effect with a debounce mechanism
   useEffect(() => {
-    if (gridApi && 
-        (settings?.columnsState || 
-         settings?.filterState || 
-         settings?.sortState)) {
-      // Only apply the grid state settings that have changed
-      console.log('Applying grid state settings (columns/filters/sorts)');
+    if (!gridApi) return;
+
+    // Check if any grid state settings have changed
+    const hasGridStateChanges = settings?.columnsState || settings?.filterState || settings?.sortState;
+    const hasAdvancedChanges = settings?.rowGroupState || settings?.pivotState || settings?.chartState;
+
+    if (!hasGridStateChanges && !hasAdvancedChanges) return;
+
+    // Use a debounce to avoid multiple rapid updates
+    const debounceTimer = setTimeout(() => {
+      if (process.env.NODE_ENV === 'development') {
+        if (hasGridStateChanges) {
+          console.log('Applying grid state settings (columns/filters/sorts)');
+        }
+        if (hasAdvancedChanges) {
+          console.log('Applying advanced grid settings (groups/pivots/charts)');
+        }
+      }
+
+      // Apply all settings in a single batch
       applyGridSettings();
-    }
-  }, [gridApi, settings?.columnsState, settings?.filterState, settings?.sortState, applyGridSettings]);
-  
-  // Handle advanced features with even less frequent updates
-  useEffect(() => {
-    if (gridApi && 
-        (settings?.rowGroupState || 
-         settings?.pivotState || 
-         settings?.chartState)) {
-      // Only apply the advanced settings when they change
-      console.log('Applying advanced grid settings (groups/pivots/charts)');
-      applyGridSettings();
-    }
-  }, [gridApi, settings?.rowGroupState, settings?.pivotState, settings?.chartState, applyGridSettings]);
+    }, 50); // Short debounce to batch closely-timed updates
+
+    return () => clearTimeout(debounceTimer);
+  }, [
+    gridApi,
+    settings?.columnsState,
+    settings?.filterState,
+    settings?.sortState,
+    settings?.rowGroupState,
+    settings?.pivotState,
+    settings?.chartState,
+    applyGridSettings
+  ]);
 
   // Define default column properties - AG Grid 33+ syntax
   const defaultColDef = useMemo(() => ({
@@ -136,11 +163,13 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   // Batch all grid initialization steps in a single function
   const setupGridApi = useCallback((api: any) => {
     if (!api) return;
-    
-    console.log('Setting up grid API with batched operations');
-    
-    // Store reference in window for emergency access
-    if (typeof window !== 'undefined') {
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Setting up grid API with batched operations');
+    }
+
+    // Store reference in window for emergency access only in development
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       (window as any).__gridApi = api;
       (window as any).__hasGridApi = true;
       (window as any).__refreshGridApi = () => {
@@ -148,20 +177,26 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         return 'Grid API refreshed';
       };
     }
-    
+
     // Set API in store - this operation is synchronous
     setGridApi(api);
-    
-    // Apply settings immediately - the grid API is available right away
+
+    // Apply settings with a slight delay to ensure grid is fully initialized
     if (api && typeof api.getColumn === 'function') {
-      console.log('Applying initial settings to grid');
-      applyGridSettings();
-      
-      // Set initial focus to first cell
-      const columns = api.getColumns();
-      if (columns && columns.length > 0) {
-        api.setFocusedCell(0, columns[0].getColId());
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Applying initial settings to grid');
       }
+
+      // Use a short timeout to ensure the grid is fully rendered
+      setTimeout(() => {
+        applyGridSettings();
+
+        // Set initial focus to first cell
+        const columns = api.getColumns();
+        if (columns && columns.length > 0) {
+          api.setFocusedCell(0, columns[0].getColId());
+        }
+      }, 50);
     }
   }, [setGridApi, applyGridSettings]);
 
@@ -179,6 +214,18 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       console.error('Error in onGridReady:', error);
     }
   }, [setupGridApi]);
+
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up any references to the grid API
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        delete (window as any).__gridApi;
+        delete (window as any).__hasGridApi;
+        delete (window as any).__refreshGridApi;
+      }
+    };
+  }, []);
 
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">

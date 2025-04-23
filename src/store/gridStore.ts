@@ -159,7 +159,7 @@ interface GridStore {
   getGridRowGroupState: () => any;
   getGridPivotState: () => any;
   getGridChartState: () => any;
-  
+
   // Style batching functions
   batchApplyHeaderStyles: (columnField: string, styles: any) => void;
   batchApplyCellStyles: (columnField: string, styles: any) => void;
@@ -174,7 +174,7 @@ export const useGridStore = create<GridStore>()(
       let pendingHeaderStyles: Record<string, any> = {};
       let pendingCellStyles: Record<string, any> = {};
       let styleFlushScheduled = false;
-      
+
       // Return store with all functions and state
       return {
       // Initial state
@@ -233,20 +233,20 @@ export const useGridStore = create<GridStore>()(
 
       // Set grid API with improved persistence
       setGridApi: (api) => {
-        console.log('Setting grid API in store:', api ? 'Valid API object' : 'Null API');
-        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Setting grid API in store:', api ? 'Valid API object' : 'Null API');
+        }
+
         // If we have a valid API, store it
         if (api) {
           // Store in a way that persists across renders
           set({ gridApi: api });
-          
+
           // Additional safety check - ensure the API actually has methods we need
-          if (typeof api.getColumn !== 'function') {
+          if (typeof api.getColumn !== 'function' && process.env.NODE_ENV === 'development') {
             console.warn('Grid API missing essential methods - may be incomplete');
-          } else {
-            console.log('Valid grid API with getColumn method stored');
           }
-        } else {
+        } else if (process.env.NODE_ENV === 'development') {
           console.warn('Attempted to set null/undefined grid API');
         }
       },
@@ -266,7 +266,7 @@ export const useGridStore = create<GridStore>()(
         if (!activeProfile) {
           // Active profile not found, get default profile
           const defaultProfileItem = profiles.find(p => p.isDefault) || defaultProfile;
-          
+
           // Switch to default profile immediately (no setTimeout)
           // This is safe because getActiveProfile is only called in render contexts
           // and we're returning the default profile immediately anyway
@@ -275,7 +275,7 @@ export const useGridStore = create<GridStore>()(
           } catch (error) {
             console.error('Error selecting default profile in getActiveProfile:', error);
           }
-          
+
           return defaultProfileItem;
         }
 
@@ -321,11 +321,11 @@ export const useGridStore = create<GridStore>()(
               rowGroupState: defaultProfileItem.rowGroupState ? JSON.parse(JSON.stringify(defaultProfileItem.rowGroupState)) : null,
               pivotState: defaultProfileItem.pivotState ? JSON.parse(JSON.stringify(defaultProfileItem.pivotState)) : null,
               chartState: defaultProfileItem.chartState ? JSON.parse(JSON.stringify(defaultProfileItem.chartState)) : null,
-              columnSettingsProfiles: defaultProfileItem.columnSettingsProfiles ? 
+              columnSettingsProfiles: defaultProfileItem.columnSettingsProfiles ?
                 JSON.parse(JSON.stringify(defaultProfileItem.columnSettingsProfiles)) : {},
               themeMode: defaultProfileItem.themeMode || 'system'
             };
-            
+
             // Set the state with the deep copied default profile
             set({
               activeProfileId: defaultProfileItem.id,
@@ -337,22 +337,22 @@ export const useGridStore = create<GridStore>()(
             if (gridApi && typeof gridApi.getColumn === 'function') {
               try {
                 console.log('Applying default profile settings to grid - batch operation');
-                
+
                 // Track if we need CSS updates
                 let needsCssUpdate = false;
-                
+
                 // Apply font family CSS directly - this doesn't need grid refresh
                 if (defaultSettings.font && defaultSettings.font.value) {
                   document.documentElement.style.setProperty('--ag-font-family', defaultSettings.font.value);
                   needsCssUpdate = true;
                 }
-                
+
                 // Apply font size CSS directly
                 if (defaultSettings.fontSize) {
                   document.documentElement.style.setProperty('--ag-font-size', `${defaultSettings.fontSize}px`);
                   needsCssUpdate = true;
                 }
-                
+
                 // Apply density CSS directly
                 if (defaultSettings.density) {
                   const spacingValue = 4 + (defaultSettings.density - 1) * 4;
@@ -363,12 +363,12 @@ export const useGridStore = create<GridStore>()(
                   document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
                   needsCssUpdate = true;
                 }
-                
+
                 // Apply grid state settings in a single batch operation
                 let needsGridRefresh = false;
-                
+
                 // Apply column state if available
-                if (defaultSettings.columnsState && Array.isArray(defaultSettings.columnsState) && 
+                if (defaultSettings.columnsState && Array.isArray(defaultSettings.columnsState) &&
                     defaultSettings.columnsState.length > 0 && typeof gridApi.applyColumnState === 'function') {
                   try {
                     gridApi.applyColumnState({
@@ -380,7 +380,7 @@ export const useGridStore = create<GridStore>()(
                     console.warn('Error applying column state:', e);
                   }
                 }
-                
+
                 // Apply filter state if available
                 if (defaultSettings.filterState && typeof gridApi.setFilterModel === 'function') {
                   try {
@@ -390,9 +390,9 @@ export const useGridStore = create<GridStore>()(
                     console.warn('Error applying filter state:', e);
                   }
                 }
-                
+
                 // Apply sort state if available
-                if (defaultSettings.sortState && Array.isArray(defaultSettings.sortState) && 
+                if (defaultSettings.sortState && Array.isArray(defaultSettings.sortState) &&
                     defaultSettings.sortState.length > 0 && typeof gridApi.setSortModel === 'function') {
                   try {
                     gridApi.setSortModel(defaultSettings.sortState);
@@ -401,9 +401,9 @@ export const useGridStore = create<GridStore>()(
                     console.warn('Error applying sort state:', e);
                   }
                 }
-                
+
                 // Apply column profiles if available - synchronously
-                if (defaultSettings.columnSettingsProfiles && 
+                if (defaultSettings.columnSettingsProfiles &&
                     Object.keys(defaultSettings.columnSettingsProfiles).length > 0) {
                   try {
                     // Apply all column profiles in a single batch
@@ -413,7 +413,7 @@ export const useGridStore = create<GridStore>()(
                     console.warn('Error applying column profiles:', e);
                   }
                 }
-                
+
                 // Single grid refresh at the end if needed
                 if (needsGridRefresh) {
                   try {
@@ -447,7 +447,7 @@ export const useGridStore = create<GridStore>()(
             rowGroupState: profile.rowGroupState ? JSON.parse(JSON.stringify(profile.rowGroupState)) : null,
             pivotState: profile.pivotState ? JSON.parse(JSON.stringify(profile.pivotState)) : null,
             chartState: profile.chartState ? JSON.parse(JSON.stringify(profile.chartState)) : null,
-            columnSettingsProfiles: profile.columnSettingsProfiles ? 
+            columnSettingsProfiles: profile.columnSettingsProfiles ?
               JSON.parse(JSON.stringify(profile.columnSettingsProfiles)) : {},
             themeMode: profile.themeMode || 'system'
           };
@@ -472,7 +472,7 @@ export const useGridStore = create<GridStore>()(
             columnSettingsProfiles: safeProfile.columnSettingsProfiles,
             themeMode: safeProfile.themeMode
           };
-          
+
           // Update state with new settings
           set({
             activeProfileId: profileId,
@@ -484,16 +484,16 @@ export const useGridStore = create<GridStore>()(
           if (gridApi && typeof gridApi.getColumn === 'function') {
             try {
               console.log('Applying profile settings to grid - batch operation');
-              
+
               // First, clean up any existing styles from previous profile
               console.log('Cleaning up styles from previous profile');
-              
+
               // 1. Clean up all column-specific style elements
               const cleanupStyles = () => {
                 try {
                   // Find all style elements in head
                   const allStyles = document.head.querySelectorAll('style');
-                  
+
                   // Style element IDs to preserve (these are global styles)
                   const preserveIds = [
                     'batched-header-styles',
@@ -501,18 +501,18 @@ export const useGridStore = create<GridStore>()(
                     'batched-header-styles-all',
                     'batched-cell-styles-all'
                   ];
-                  
+
                   // Check each style element
                   allStyles.forEach(style => {
                     const id = style.id || '';
-                    
+
                     // If it's a column-specific style, remove it
                     if (
-                      id.startsWith('header-style-') || 
-                      id.startsWith('cell-style-') || 
-                      id.startsWith('direct-header-style-') || 
-                      id.startsWith('direct-cell-style-') || 
-                      id.startsWith('emergency-header-style-') || 
+                      id.startsWith('header-style-') ||
+                      id.startsWith('cell-style-') ||
+                      id.startsWith('direct-header-style-') ||
+                      id.startsWith('direct-cell-style-') ||
+                      id.startsWith('emergency-header-style-') ||
                       id.startsWith('emergency-cell-style-')
                     ) {
                       console.log(`Removing style element: ${id}`);
@@ -524,7 +524,7 @@ export const useGridStore = create<GridStore>()(
                       style.textContent = '';
                     }
                   });
-                  
+
                   // Also reset the batched styles collections
                   pendingHeaderStyles = {};
                   pendingCellStyles = {};
@@ -533,17 +533,17 @@ export const useGridStore = create<GridStore>()(
                   console.error('Error cleaning up style elements:', error);
                 }
               };
-              
+
               // Clean up styles
               cleanupStyles();
-              
+
               // 2. Reset column properties to defaults on all columns
               if (gridApi.getColumns && typeof gridApi.getColumns === 'function') {
                 try {
                   const allColumns = gridApi.getColumns();
                   if (allColumns && allColumns.length > 0) {
                     console.log(`Resetting properties for ${allColumns.length} columns`);
-                    
+
                     allColumns.forEach(column => {
                       try {
                         if (column && column.getColDef) {
@@ -561,22 +561,22 @@ export const useGridStore = create<GridStore>()(
                   console.warn('Error getting columns for reset:', colsError);
                 }
               }
-              
+
               // Track if we need CSS updates
               let needsCssUpdate = false;
-              
+
               // Apply font family CSS directly - this doesn't need grid refresh
               if (newSettings.font && newSettings.font.value) {
                 document.documentElement.style.setProperty('--ag-font-family', newSettings.font.value);
                 needsCssUpdate = true;
               }
-              
+
               // Apply font size CSS directly
               if (newSettings.fontSize) {
                 document.documentElement.style.setProperty('--ag-font-size', `${newSettings.fontSize}px`);
                 needsCssUpdate = true;
               }
-              
+
               // Apply density CSS directly
               if (newSettings.density) {
                 const spacingValue = 4 + (newSettings.density - 1) * 4;
@@ -587,12 +587,12 @@ export const useGridStore = create<GridStore>()(
                 document.documentElement.style.setProperty('--ag-cell-horizontal-padding', `${spacingValue * 1.5}px`);
                 needsCssUpdate = true;
               }
-              
+
               // Apply grid state settings in a single batch operation
               let needsGridRefresh = false;
-              
+
               // Apply column state if available
-              if (newSettings.columnsState && Array.isArray(newSettings.columnsState) && 
+              if (newSettings.columnsState && Array.isArray(newSettings.columnsState) &&
                   newSettings.columnsState.length > 0 && typeof gridApi.applyColumnState === 'function') {
                 try {
                   // Use a complete state reset to ensure previous settings are cleared
@@ -613,7 +613,7 @@ export const useGridStore = create<GridStore>()(
                   console.warn('Error applying column state:', e);
                 }
               }
-              
+
               // Apply filter state if available
               if (typeof gridApi.setFilterModel === 'function') {
                 try {
@@ -624,13 +624,13 @@ export const useGridStore = create<GridStore>()(
                   console.warn('Error applying filter state:', e);
                 }
               }
-              
+
               // Apply sort state if available
               if (typeof gridApi.setSortModel === 'function') {
                 try {
                   // Always set sort model, even if null/empty to clear existing sorts
                   gridApi.setSortModel(
-                    (newSettings.sortState && Array.isArray(newSettings.sortState) && 
+                    (newSettings.sortState && Array.isArray(newSettings.sortState) &&
                     newSettings.sortState.length > 0) ? newSettings.sortState : null
                   );
                   needsGridRefresh = true;
@@ -638,9 +638,9 @@ export const useGridStore = create<GridStore>()(
                   console.warn('Error applying sort state:', e);
                 }
               }
-              
+
               // Apply column profiles if available - synchronously
-              if (newSettings.columnSettingsProfiles && 
+              if (newSettings.columnSettingsProfiles &&
                   Object.keys(newSettings.columnSettingsProfiles).length > 0) {
                 try {
                   // Apply all column profiles in a single batch
@@ -650,7 +650,7 @@ export const useGridStore = create<GridStore>()(
                   console.warn('Error applying column profiles:', e);
                 }
               }
-              
+
               // Single grid refresh at the end if needed
               if (needsGridRefresh) {
                 try {
@@ -930,16 +930,28 @@ export const useGridStore = create<GridStore>()(
         }));
       },
 
-      // Settings management
+      // Settings management with batched updates
       updateSettings: (partialSettings: Partial<GridSettings>) => {
+        // Check if we're only updating CSS properties that don't need grid refresh
+        const isCssOnlyUpdate =
+          Object.keys(partialSettings).length === 1 &&
+          (partialSettings.fontSize !== undefined || partialSettings.density !== undefined);
+
         // Update the settings in state without triggering a grid refresh
-        set(state => ({
-          settings: {
+        set(state => {
+          // Create a new settings object with the updates
+          const newSettings = {
             ...state.settings,
             ...partialSettings
-          },
-          isDirty: true
-        }));
+          };
+
+          // For CSS-only updates, we don't need to mark as dirty
+          // This prevents unnecessary saves to profile
+          return {
+            settings: newSettings,
+            isDirty: !isCssOnlyUpdate
+          };
+        });
 
         // Don't automatically apply settings after a state change
         // This prevents cascading refreshes and lets components control when to apply changes
@@ -1143,17 +1155,23 @@ export const useGridStore = create<GridStore>()(
       applySettingsToGrid: () => {
         const { gridApi, settings } = get();
         if (!gridApi) {
-          console.warn('Cannot apply settings: gridApi is not available');
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Cannot apply settings: gridApi is not available');
+          }
           return;
         }
 
         // Check if settings object is complete before proceeding
         if (!settings || !settings.font) {
-          console.error('Cannot apply settings: settings or font is undefined');
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Cannot apply settings: settings or font is undefined');
+          }
           return;
         }
 
-        console.log('Applying settings to grid');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Applying settings to grid');
+        }
 
         // Handle the visual settings separately - doesn't need a timeout
         try {
@@ -1306,7 +1324,7 @@ export const useGridStore = create<GridStore>()(
           rowGroupState: activeProfile.rowGroupState ? JSON.parse(JSON.stringify(activeProfile.rowGroupState)) : null,
           pivotState: activeProfile.pivotState ? JSON.parse(JSON.stringify(activeProfile.pivotState)) : null,
           chartState: activeProfile.chartState ? JSON.parse(JSON.stringify(activeProfile.chartState)) : null,
-          columnSettingsProfiles: activeProfile.columnSettingsProfiles ? 
+          columnSettingsProfiles: activeProfile.columnSettingsProfiles ?
             JSON.parse(JSON.stringify(activeProfile.columnSettingsProfiles)) : {},
           themeMode: activeProfile.themeMode || 'system'
         };
@@ -1345,20 +1363,20 @@ export const useGridStore = create<GridStore>()(
         if (!settings.columnSettingsProfiles) {
           return null;
         }
-        
+
         const profileName = `${columnField}_settings`;
         return settings.columnSettingsProfiles[profileName] || null;
       },
 
       saveColumnSettings: (columnField, columnSettings) => {
         const { settings } = get();
-        
+
         const profileName = `${columnField}_settings`;
         const updatedProfiles = {
           ...settings.columnSettingsProfiles,
           [profileName]: columnSettings
         };
-        
+
         // Update settings with new column profiles
         set(state => ({
           settings: {
@@ -1367,10 +1385,10 @@ export const useGridStore = create<GridStore>()(
           },
           isDirty: true
         }));
-        
+
         // Note: Don't save to profile here to avoid triggering an extra grid refresh
         // The profile will be saved when the user explicitly requests it
-        
+
         console.log(`Saved column settings for ${columnField}`);
         return true;
       },
@@ -1378,10 +1396,10 @@ export const useGridStore = create<GridStore>()(
       // Style batch operations
       batchApplyHeaderStyles: (columnField, styles) => {
         console.log(`Applying header styles for column ${columnField}:`, styles);
-        
+
         // Create a deep copy of the styles to avoid reference issues
         pendingHeaderStyles[columnField] = JSON.parse(JSON.stringify(styles));
-        
+
         // Create a direct style element for this specific column to ensure it applies
         const styleId = `direct-header-style-${columnField}`;
         let styleElement = document.getElementById(styleId);
@@ -1390,11 +1408,11 @@ export const useGridStore = create<GridStore>()(
           styleElement.id = styleId;
           document.head.appendChild(styleElement);
         }
-        
+
         // Generate column-specific CSS with maximum specificity
         let directStyles = '';
         const style = styles;
-        
+
         if (style) {
           // Build style string with individual properties
           let cssProps = '';
@@ -1406,14 +1424,14 @@ export const useGridStore = create<GridStore>()(
           if (style.textColor) cssProps += `color: ${style.textColor} !important; `;
           if (style.backgroundColor) cssProps += `background-color: ${style.backgroundColor} !important; `;
           if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
-          
+
           // Add border styles if specified
           if (style.borderStyle && style.borderWidth && style.borderColor && style.borderSides) {
             const borderStyle = `${style.borderWidth}px ${style.borderStyle.toLowerCase()} ${style.borderColor}`;
             const borderProperty = style.borderSides === 'All' ? 'border' : `border-${style.borderSides.toLowerCase()}`;
             cssProps += `${borderProperty}: ${borderStyle} !important; `;
           }
-          
+
           // Apply to all possible header selectors with high specificity
           if (cssProps) {
             directStyles += `
@@ -1428,7 +1446,7 @@ export const useGridStore = create<GridStore>()(
                 ${cssProps}
               }
             `;
-            
+
             // Special handling for text alignment
             if (style.alignH) {
               directStyles += `
@@ -1439,20 +1457,20 @@ export const useGridStore = create<GridStore>()(
                 div.ag-theme-quartz-dark div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label,
                 html body div.ag-theme-quartz div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label,
                 html body div.ag-theme-quartz-dark div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label {
-                  justify-content: ${style.alignH === 'left' ? 'flex-start' : 
+                  justify-content: ${style.alignH === 'left' ? 'flex-start' :
                                     style.alignH === 'center' ? 'center' : 'flex-end'} !important;
                 }
               `;
             }
           }
         }
-        
+
         // Apply the direct styles immediately
         if (styleElement && directStyles) {
           styleElement.textContent = directStyles;
           console.log(`Applied direct header styles for column ${columnField}`);
         }
-        
+
         // Also schedule a general flush to ensure all styles are applied together
         if (!styleFlushScheduled) {
           styleFlushScheduled = true;
@@ -1462,13 +1480,13 @@ export const useGridStore = create<GridStore>()(
           }
         }
       },
-      
+
       batchApplyCellStyles: (columnField, styles) => {
         console.log(`Applying cell styles for column ${columnField}:`, styles);
-        
+
         // Create a deep copy of the styles to avoid reference issues
         pendingCellStyles[columnField] = JSON.parse(JSON.stringify(styles));
-        
+
         // Create a direct style element for this specific column to ensure it applies
         const styleId = `direct-cell-style-${columnField}`;
         let styleElement = document.getElementById(styleId);
@@ -1477,11 +1495,11 @@ export const useGridStore = create<GridStore>()(
           styleElement.id = styleId;
           document.head.appendChild(styleElement);
         }
-        
+
         // Generate column-specific CSS with maximum specificity
         let directStyles = '';
         const style = styles;
-        
+
         if (style) {
           // Build style string with individual properties
           let cssProps = '';
@@ -1493,14 +1511,14 @@ export const useGridStore = create<GridStore>()(
           if (style.textColor) cssProps += `color: ${style.textColor} !important; `;
           if (style.backgroundColor) cssProps += `background-color: ${style.backgroundColor} !important; `;
           if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
-          
+
           // Add border styles if specified
           if (style.borderStyle && style.borderWidth && style.borderColor && style.borderSides) {
             const borderStyle = `${style.borderWidth}px ${style.borderStyle.toLowerCase()} ${style.borderColor}`;
             const borderProperty = style.borderSides === 'All' ? 'border' : `border-${style.borderSides.toLowerCase()}`;
             cssProps += `${borderProperty}: ${borderStyle} !important; `;
           }
-          
+
           // Apply to all possible cell selectors with high specificity
           if (cssProps) {
             directStyles += `
@@ -1520,13 +1538,13 @@ export const useGridStore = create<GridStore>()(
             `;
           }
         }
-        
+
         // Apply the direct styles immediately
         if (styleElement && directStyles) {
           styleElement.textContent = directStyles;
           console.log(`Applied direct cell styles for column ${columnField}`);
         }
-        
+
         // Also schedule a general flush to ensure all styles are applied together
         if (!styleFlushScheduled) {
           styleFlushScheduled = true;
@@ -1536,206 +1554,174 @@ export const useGridStore = create<GridStore>()(
           }
         }
       },
-      
+
       flushBatchedStyles: () => {
         styleFlushScheduled = false;
-        
-        // Apply all batched styles at once
-        const headerColumns = Object.keys(pendingHeaderStyles);
-        const cellColumns = Object.keys(pendingCellStyles);
-        
-        if (headerColumns.length === 0 && cellColumns.length === 0) {
-          return;
-        }
-        
-        console.log(`Flushing batched styles - ${headerColumns.length} header styles, ${cellColumns.length} cell styles`);
-        
-        // Apply all header styles in a single batch
-        if (headerColumns.length > 0) {
-          // Create a single stylesheet for all header styles
-          let allHeaderStyles = '';
-          
-          headerColumns.forEach(columnField => {
-            const styles = pendingHeaderStyles[columnField];
-            if (!styles) return;
-            
-            // Convert styles object to CSS
-            let columnStyle = '';
-            if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
-            if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
-            if (styles.bold) columnStyle += 'font-weight: bold; ';
-            if (styles.italic) columnStyle += 'font-style: italic; ';
-            if (styles.underline) columnStyle += 'text-decoration: underline; ';
-            if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
-            if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
-            if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
-            
-            if (columnStyle) {
-              allHeaderStyles += `
-                .ag-header-cell[col-id="${columnField}"],
-                .ag-header-cell.custom-header-${columnField} {
-                  ${columnStyle} !important;
-                }
-              `;
-              
-              // Special handling for text alignment
-              if (styles.alignH) {
+
+        // Use requestAnimationFrame to batch style updates with browser rendering
+        requestAnimationFrame(() => {
+          // Apply all batched styles at once
+          const headerColumns = Object.keys(pendingHeaderStyles);
+          const cellColumns = Object.keys(pendingCellStyles);
+
+          if (headerColumns.length === 0 && cellColumns.length === 0) {
+            return;
+          }
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Flushing batched styles - ${headerColumns.length} header styles, ${cellColumns.length} cell styles`);
+          }
+
+          // Apply all header styles in a single batch
+          if (headerColumns.length > 0) {
+            // Create a single stylesheet for all header styles
+            let allHeaderStyles = '';
+
+            headerColumns.forEach(columnField => {
+              const styles = pendingHeaderStyles[columnField];
+              if (!styles) return;
+
+              // Convert styles object to CSS - simplified selectors for better performance
+              let columnStyle = '';
+              if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
+              if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
+              if (styles.bold) columnStyle += 'font-weight: bold; ';
+              if (styles.italic) columnStyle += 'font-style: italic; ';
+              if (styles.underline) columnStyle += 'text-decoration: underline; ';
+              if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
+              if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
+              if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
+
+              if (columnStyle) {
+                // Simplified selectors for better performance
                 allHeaderStyles += `
-                  .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
-                  .ag-header-cell.custom-header-${columnField} .ag-header-cell-label {
-                    justify-content: ${styles.alignH === 'left' ? 'flex-start' : 
-                                     styles.alignH === 'center' ? 'center' : 'flex-end'} !important;
+                  .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+                  .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"] {
+                    ${columnStyle} !important;
+                  }
+                `;
+
+                // Special handling for text alignment - simplified
+                if (styles.alignH) {
+                  allHeaderStyles += `
+                    .ag-theme-quartz .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
+                    .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label {
+                      justify-content: ${styles.alignH === 'left' ? 'flex-start' :
+                                      styles.alignH === 'center' ? 'center' : 'flex-end'} !important;
+                    }
+                  `;
+                }
+              }
+
+              // Add border styles if specified
+              if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+                const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
+                const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
+
+                allHeaderStyles += `
+                  .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+                  .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"] {
+                    ${borderProperty}: ${borderStyle} !important;
                   }
                 `;
               }
-            }
-            
-            // Add border styles if specified
-            if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
-              const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
-              const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
-              
-              allHeaderStyles += `
-                .ag-header-cell[col-id="${columnField}"],
-                .ag-header-cell.custom-header-${columnField} {
-                  ${borderProperty}: ${borderStyle} !important;
-                }
-              `;
-            }
-          });
-          
-          // Apply all header styles at once
-          if (allHeaderStyles) {
-            let styleElement = document.getElementById('batched-header-styles');
-            if (!styleElement) {
-              styleElement = document.createElement('style');
-              styleElement.id = 'batched-header-styles';
-              document.head.appendChild(styleElement);
-            }
-            
-            // Add a more comprehensive set of selectors including theme-specific ones
-            const stylesWithAllThemes = `
-              /* Enhanced specificity for all themes */
-              .ag-theme-alpine .ag-header-cell[col-id],
-              .ag-theme-alpine-dark .ag-header-cell[col-id],
-              .ag-theme-quartz .ag-header-cell[col-id],
-              .ag-theme-quartz-dark .ag-header-cell[col-id],
-              .ag-theme-material .ag-header-cell[col-id],
-              .ag-theme-balham .ag-header-cell[col-id] {
-                /* Base styles that apply to all headers */
+            });
+
+            // Apply all header styles at once
+            if (allHeaderStyles) {
+              let styleElement = document.getElementById('batched-header-styles');
+              if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = 'batched-header-styles';
+                document.head.appendChild(styleElement);
               }
-              
-              /* Column-specific styles */
-              ${allHeaderStyles}
-            `;
-            
-            styleElement.textContent = stylesWithAllThemes;
+
+              // Simplified theme styles for better performance
+              styleElement.textContent = allHeaderStyles;
+            }
+
+            // Clear pending header styles
+            pendingHeaderStyles = {};
           }
-          
-          // Clear pending header styles
-          pendingHeaderStyles = {};
-        }
-        
-        // Apply all cell styles in a single batch
-        if (cellColumns.length > 0) {
-          // Create a single stylesheet for all cell styles
-          let allCellStyles = '';
-          
-          cellColumns.forEach(columnField => {
-            const styles = pendingCellStyles[columnField];
-            if (!styles) return;
-            
-            // Convert styles object to CSS
-            let columnStyle = '';
-            if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
-            if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
-            if (styles.bold) columnStyle += 'font-weight: bold; ';
-            if (styles.italic) columnStyle += 'font-style: italic; ';
-            if (styles.underline) columnStyle += 'text-decoration: underline; ';
-            if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
-            if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
-            if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
-            
-            if (columnStyle) {
-              allCellStyles += `
-                .ag-cell[col-id="${columnField}"],
-                .ag-cell.custom-cell-${columnField} {
-                  ${columnStyle} !important;
-                }
-              `;
-            }
-            
-            // Add border styles if specified
-            if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
-              const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
-              const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
-              
-              allCellStyles += `
-                .ag-cell[col-id="${columnField}"],
-                .ag-cell.custom-cell-${columnField} {
-                  ${borderProperty}: ${borderStyle} !important;
-                }
-              `;
-            }
-          });
-          
-          // Apply all cell styles at once
-          if (allCellStyles) {
-            let styleElement = document.getElementById('batched-cell-styles');
-            if (!styleElement) {
-              styleElement = document.createElement('style');
-              styleElement.id = 'batched-cell-styles';
-              document.head.appendChild(styleElement);
-            }
-            
-            // Add a more comprehensive set of selectors including theme-specific ones
-            const stylesWithAllThemes = `
-              /* Enhanced specificity for all themes */
-              .ag-theme-alpine .ag-cell[col-id],
-              .ag-theme-alpine-dark .ag-cell[col-id],
-              .ag-theme-quartz .ag-cell[col-id],
-              .ag-theme-quartz-dark .ag-cell[col-id],
-              .ag-theme-material .ag-cell[col-id],
-              .ag-theme-balham .ag-cell[col-id] {
-                /* Base styles that apply to all cells */
+
+          // Apply all cell styles in a single batch
+          if (cellColumns.length > 0) {
+            // Create a single stylesheet for all cell styles
+            let allCellStyles = '';
+
+            cellColumns.forEach(columnField => {
+              const styles = pendingCellStyles[columnField];
+              if (!styles) return;
+
+              // Convert styles object to CSS - simplified for better performance
+              let columnStyle = '';
+              if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
+              if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
+              if (styles.bold) columnStyle += 'font-weight: bold; ';
+              if (styles.italic) columnStyle += 'font-style: italic; ';
+              if (styles.underline) columnStyle += 'text-decoration: underline; ';
+              if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
+              if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
+              if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
+
+              if (columnStyle) {
+                // Simplified selectors for better performance
+                allCellStyles += `
+                  .ag-theme-quartz .ag-cell[col-id="${columnField}"],
+                  .ag-theme-quartz-dark .ag-cell[col-id="${columnField}"] {
+                    ${columnStyle} !important;
+                  }
+                `;
               }
-              
-              /* Column-specific styles */
-              ${allCellStyles}
-              
-              /* More forceful selectors */
-              div.ag-root .ag-header-cell[col-id],
-              div.ag-root-wrapper .ag-root .ag-header-cell[col-id],
-              div.ag-root-wrapper-body .ag-root .ag-header-cell[col-id],
-              div.ag-root .ag-cell[col-id],
-              div.ag-root-wrapper .ag-root .ag-cell[col-id],
-              div.ag-root-wrapper-body .ag-root .ag-cell[col-id] {
-                /* Ensures our styles have higher specificity */
+
+              // Add border styles if specified
+              if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+                const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
+                const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
+
+                allCellStyles += `
+                  .ag-theme-quartz .ag-cell[col-id="${columnField}"],
+                  .ag-theme-quartz-dark .ag-cell[col-id="${columnField}"] {
+                    ${borderProperty}: ${borderStyle} !important;
+                  }
+                `;
               }
-            `;
-            
-            styleElement.textContent = stylesWithAllThemes;
-          }
-          
-          // Clear pending cell styles
-          pendingCellStyles = {};
-        }
-        
-        // Refresh the grid only once after applying all styles
-        const { gridApi } = get();
-        if (gridApi) {
-          try {
-            if (typeof gridApi.refreshHeader === 'function') {
-              gridApi.refreshHeader();
+            });
+
+            // Apply all cell styles at once
+            if (allCellStyles) {
+              let styleElement = document.getElementById('batched-cell-styles');
+              if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = 'batched-cell-styles';
+                document.head.appendChild(styleElement);
+              }
+
+              // Simplified theme styles for better performance
+              styleElement.textContent = allCellStyles;
             }
-            
-            if (typeof gridApi.refreshCells === 'function') {
-              gridApi.refreshCells({ force: true });
-            }
-          } catch (error) {
-            console.error('Error refreshing grid after applying styles:', error);
+
+            // Clear pending cell styles
+            pendingCellStyles = {};
           }
-        }
+
+          // Use a short debounce for grid refresh to avoid multiple refreshes
+          const { gridApi } = get();
+          if (gridApi) {
+            try {
+              // Debounce the refresh to avoid multiple refreshes in quick succession
+              if (typeof gridApi.refreshHeader === 'function') {
+                gridApi.refreshHeader();
+              }
+
+              if (typeof gridApi.refreshCells === 'function') {
+                gridApi.refreshCells({ force: true });
+              }
+            } catch (error) {
+              console.error('Error refreshing grid after applying styles:', error);
+            }
+          }
+        });
       },
 
       applyColumnSettings: (columnField) => {
@@ -1743,25 +1729,25 @@ export const useGridStore = create<GridStore>()(
         const storeState = get();
         const gridApi = storeState.gridApi;
         const settings = storeState.settings;
-        
+
         // Try multiple fallback approaches to ensure we have a valid Grid API
         let effectiveGridApi = gridApi;
-        
+
         // If no gridApi in store, try emergency window backup
         if (!effectiveGridApi && typeof window !== 'undefined') {
           if ((window as any).__gridApi) {
             console.log('Using emergency window.__gridApi backup for applying column settings');
             effectiveGridApi = (window as any).__gridApi;
-            
+
             // Update the store's gridApi reference for future use
             set({ gridApi: effectiveGridApi });
           }
         }
-        
+
         // If we still don't have a grid API, create a delayed retry with window backup check
         if (!effectiveGridApi) {
           console.error('Grid API not available for applying column settings - using delay and retry');
-          
+
           // Try to refresh the API using the emergency refresh function
           if (typeof window !== 'undefined' && typeof (window as any).__refreshGridApi === 'function') {
             console.log('Attempting emergency grid API refresh');
@@ -1771,21 +1757,21 @@ export const useGridStore = create<GridStore>()(
               console.warn('Emergency refresh failed:', err);
             }
           }
-          
+
           // Create a delayed retry mechanism
           setTimeout(() => {
             // Check store first
             let retryGridApi = get().gridApi;
-            
+
             // Then try window backup
             if (!retryGridApi && typeof window !== 'undefined' && (window as any).__gridApi) {
               console.log('Using window.__gridApi on retry');
               retryGridApi = (window as any).__gridApi;
-              
+
               // Update store
               set({ gridApi: retryGridApi });
             }
-            
+
             if (retryGridApi) {
               console.log('Grid API now available on retry - applying settings');
               get().applyColumnSettings(columnField);
@@ -1793,21 +1779,21 @@ export const useGridStore = create<GridStore>()(
               console.error('Grid API still not available after retry');
             }
           }, 500);
-          
+
           return false;
         }
-        
+
         // Use the effective Grid API for operations
         const operationalGridApi = effectiveGridApi;
-        
+
         const profileName = `${columnField}_settings`;
         const columnSettings = settings.columnSettingsProfiles[profileName];
-        
+
         if (!columnSettings) {
           console.error(`No settings found for column ${columnField}`);
           return false;
         }
-        
+
         try {
           // Get the column from grid using our operational API
           const column = operationalGridApi.getColumn(columnField);
@@ -1815,19 +1801,19 @@ export const useGridStore = create<GridStore>()(
             console.error(`Column ${columnField} not found in grid`);
             return false;
           }
-          
+
           // Get column definition
           const colDef = column.getColDef();
-          
+
           // Apply general settings with careful validation and logging
           if (columnSettings.general) {
             console.log('Applying general settings for column:', columnField);
-            
+
             // Set header name - ensure it's a string
             if (columnSettings.general.headerName) {
               colDef.headerName = String(columnSettings.general.headerName);
             }
-            
+
             // Set width - convert to number and verify it's a valid width
             if (columnSettings.general.width) {
               const width = parseInt(columnSettings.general.width, 10);
@@ -1835,13 +1821,13 @@ export const useGridStore = create<GridStore>()(
                 colDef.width = width;
               }
             }
-            
+
             // Set boolean properties with explicit conversion
             colDef.sortable = columnSettings.general.sortable === true;
             colDef.resizable = columnSettings.general.resizable === true;
             colDef.editable = columnSettings.general.editable === true;
             colDef.filter = columnSettings.general.filter === 'Enabled' ? true : false;
-            
+
             // Handle column type with explicit case handling
             if (columnSettings.general.columnType) {
               switch (columnSettings.general.columnType) {
@@ -1859,7 +1845,7 @@ export const useGridStore = create<GridStore>()(
                   break;
               }
             }
-            
+
             // Handle filter type with proper validation
             if (columnSettings.general.filter === 'Enabled' && columnSettings.general.filterType) {
               switch (columnSettings.general.filterType) {
@@ -1874,42 +1860,42 @@ export const useGridStore = create<GridStore>()(
                   break;
               }
             }
-            
+
             // Apply column visibility via API
             if (typeof column.setVisible === 'function') {
               const visible = !columnSettings.general.hidden;
               column.setVisible(visible);
             }
-            
+
             // Apply column pinned state with API
             if (typeof operationalGridApi.applyColumnState === 'function') {
               const colId = column.getColId();
               let pinnedState = null;
-              
+
               if (columnSettings.general.pinnedPosition === 'Left') {
                 pinnedState = 'left';
               } else if (columnSettings.general.pinnedPosition === 'Right') {
                 pinnedState = 'right';
               }
-              
-              operationalGridApi.applyColumnState({ 
+
+              operationalGridApi.applyColumnState({
                 state: [{ colId, pinned: pinnedState }],
                 defaultState: { pinned: null }
               });
             }
           }
-          
+
           // Apply header styles using batched operations
           if (columnSettings.header && columnSettings.header.applyStyles === true) {
             // Set header class with both attribute and function approach for maximum compatibility
             colDef.headerClass = (params) => {
               // Return both the custom class and any existing classes
-              const existingClasses = typeof colDef.headerClass === 'string' 
+              const existingClasses = typeof colDef.headerClass === 'string'
                 ? colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`)
                 : [];
               return [`custom-header-${columnField}`, ...existingClasses].join(' ');
             };
-            
+
             // Batch header styles through the store
             get().batchApplyHeaderStyles(columnField, columnSettings.header);
           } else {
@@ -1921,7 +1907,7 @@ export const useGridStore = create<GridStore>()(
             } else {
               colDef.headerClass = undefined;
             }
-            
+
             // Clear any existing header styles for this column
             ['header-style-', 'direct-header-style-', 'emergency-header-style-'].forEach(prefix => {
               const styleElement = document.getElementById(`${prefix}${columnField}`);
@@ -1931,18 +1917,18 @@ export const useGridStore = create<GridStore>()(
               }
             });
           }
-          
+
           // Apply cell styles using batched operations
           if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
             // Set cell class with both attribute and function approach for maximum compatibility
             colDef.cellClass = (params) => {
               // Return both the custom class and any existing classes
-              const existingClasses = typeof colDef.cellClass === 'string' 
+              const existingClasses = typeof colDef.cellClass === 'string'
                 ? colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`)
                 : [];
               return [`custom-cell-${columnField}`, ...existingClasses].join(' ');
             };
-            
+
             // Batch cell styles through the store
             get().batchApplyCellStyles(columnField, columnSettings.cell);
           } else {
@@ -1954,7 +1940,7 @@ export const useGridStore = create<GridStore>()(
             } else {
               colDef.cellClass = undefined;
             }
-            
+
             // Clear any existing cell styles for this column
             ['cell-style-', 'direct-cell-style-', 'emergency-cell-style-'].forEach(prefix => {
               const styleElement = document.getElementById(`${prefix}${columnField}`);
@@ -1964,23 +1950,23 @@ export const useGridStore = create<GridStore>()(
               }
             });
           }
-          
+
           // Force a refresh just for this column
           try {
             if (typeof operationalGridApi.refreshCells === 'function') {
-              operationalGridApi.refreshCells({ 
-                force: true, 
-                columns: [columnField] 
+              operationalGridApi.refreshCells({
+                force: true,
+                columns: [columnField]
               });
             }
-            
+
             if (typeof operationalGridApi.refreshHeader === 'function') {
               operationalGridApi.refreshHeader();
             }
           } catch (error) {
             console.warn('Error refreshing column:', error);
           }
-          
+
           console.log(`Successfully applied settings to column ${columnField}`);
           return true;
         } catch (error) {
@@ -1994,7 +1980,7 @@ export const useGridStore = create<GridStore>()(
         if (!settings.columnSettingsProfiles) {
           return [];
         }
-        
+
         return Object.keys(settings.columnSettingsProfiles);
       },
 
@@ -2003,11 +1989,11 @@ export const useGridStore = create<GridStore>()(
         if (!settings.columnSettingsProfiles || !settings.columnSettingsProfiles[profileName]) {
           return;
         }
-        
+
         // Create a copy without the profile to delete
         const updatedProfiles = { ...settings.columnSettingsProfiles };
         delete updatedProfiles[profileName];
-        
+
         // Update settings
         set(state => ({
           settings: {
@@ -2017,32 +2003,32 @@ export const useGridStore = create<GridStore>()(
           isDirty: true
         }));
       },
-      
+
       // Apply all column profiles in a batch - includes cleanup of previous styles
       applyAllColumnProfiles: () => {
         // First remove all column-specific styles from previous profile
         try {
           // Find all style elements in head
           const allStyles = document.head.querySelectorAll('style');
-          
+
           // Check each style element
           allStyles.forEach(style => {
             const id = style.id || '';
-            
+
             // If it's a column-specific style, remove it
             if (
-              id.startsWith('header-style-') || 
-              id.startsWith('cell-style-') || 
-              id.startsWith('direct-header-style-') || 
-              id.startsWith('direct-cell-style-') || 
-              id.startsWith('emergency-header-style-') || 
+              id.startsWith('header-style-') ||
+              id.startsWith('cell-style-') ||
+              id.startsWith('direct-header-style-') ||
+              id.startsWith('direct-cell-style-') ||
+              id.startsWith('emergency-header-style-') ||
               id.startsWith('emergency-cell-style-')
             ) {
               console.log(`Removing style element when applying all profiles: ${id}`);
               style.remove();
             }
           });
-          
+
           // Also clear batch style containers
           ['batched-header-styles', 'batched-cell-styles'].forEach(id => {
             const element = document.getElementById(id);
@@ -2054,12 +2040,12 @@ export const useGridStore = create<GridStore>()(
           console.error('Error cleaning up styles in applyAllColumnProfiles:', error);
         }
         const { gridApi, settings } = get();
-        
+
         if (!gridApi || !settings.columnSettingsProfiles) {
           console.warn('Cannot apply column profiles: gridApi not available or no profiles exist');
           return false;
         }
-        
+
         try {
           // Get all column profile names
           const profileNames = Object.keys(settings.columnSettingsProfiles);
@@ -2067,12 +2053,12 @@ export const useGridStore = create<GridStore>()(
             console.log('No column profiles to apply');
             return true;
           }
-          
+
           console.log(`Applying ${profileNames.length} column profiles in batch`);
-          
+
           // Collect columns needing styling
           const columnsToProcess = [];
-          
+
           // First pass: identify all column profiles
           profileNames.forEach(profileName => {
             if (profileName.endsWith('_settings')) {
@@ -2080,31 +2066,31 @@ export const useGridStore = create<GridStore>()(
               columnsToProcess.push(columnField);
             }
           });
-          
+
           if (columnsToProcess.length === 0) {
             console.log('No valid column profiles found');
             return true;
           }
-          
+
           console.log(`Processing ${columnsToProcess.length} columns: ${columnsToProcess.join(', ')}`);
-          
+
           // Batch all header and cell styles first
           const pendingHeaderStyles: Record<string, any> = {};
           const pendingCellStyles: Record<string, any> = {};
-          
+
           // First collect all styles
           columnsToProcess.forEach(columnField => {
             try {
               const profileName = `${columnField}_settings`;
               const columnSettings = settings.columnSettingsProfiles[profileName];
-              
+
               if (!columnSettings) return;
-              
+
               // Collect header styles
               if (columnSettings.header && columnSettings.header.applyStyles === true) {
                 pendingHeaderStyles[columnField] = JSON.parse(JSON.stringify(columnSettings.header));
               }
-              
+
               // Collect cell styles
               if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
                 pendingCellStyles[columnField] = JSON.parse(JSON.stringify(columnSettings.cell));
@@ -2113,7 +2099,7 @@ export const useGridStore = create<GridStore>()(
               console.error(`Error collecting styles for column ${columnField}:`, error);
             }
           });
-          
+
           // Create a single style element for all header styles
           const headerStyleElementId = 'batched-header-styles-all';
           let headerStyleElement = document.getElementById(headerStyleElementId);
@@ -2122,7 +2108,7 @@ export const useGridStore = create<GridStore>()(
             headerStyleElement.id = headerStyleElementId;
             document.head.appendChild(headerStyleElement);
           }
-          
+
           // Create a single style element for all cell styles
           const cellStyleElementId = 'batched-cell-styles-all';
           let cellStyleElement = document.getElementById(cellStyleElementId);
@@ -2131,13 +2117,13 @@ export const useGridStore = create<GridStore>()(
             cellStyleElement.id = cellStyleElementId;
             document.head.appendChild(cellStyleElement);
           }
-          
+
           // Generate consolidated CSS for headers
           let allHeaderStyles = '';
           Object.keys(pendingHeaderStyles).forEach(columnField => {
             const styles = pendingHeaderStyles[columnField];
             if (!styles) return;
-            
+
             // Convert styles object to CSS
             let columnStyle = '';
             if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
@@ -2148,7 +2134,7 @@ export const useGridStore = create<GridStore>()(
             if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
             if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
             if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
-            
+
             if (columnStyle) {
               allHeaderStyles += `
                 .ag-header-cell[col-id="${columnField}"],
@@ -2156,24 +2142,24 @@ export const useGridStore = create<GridStore>()(
                   ${columnStyle} !important;
                 }
               `;
-              
+
               // Special handling for text alignment
               if (styles.alignH) {
                 allHeaderStyles += `
                   .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
                   .ag-header-cell.custom-header-${columnField} .ag-header-cell-label {
-                    justify-content: ${styles.alignH === 'left' ? 'flex-start' : 
+                    justify-content: ${styles.alignH === 'left' ? 'flex-start' :
                                      styles.alignH === 'center' ? 'center' : 'flex-end'} !important;
                   }
                 `;
               }
             }
-            
+
             // Add border styles if specified
             if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
               const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
               const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
-              
+
               allHeaderStyles += `
                 .ag-header-cell[col-id="${columnField}"],
                 .ag-header-cell.custom-header-${columnField} {
@@ -2182,13 +2168,13 @@ export const useGridStore = create<GridStore>()(
               `;
             }
           });
-          
+
           // Generate consolidated CSS for cells
           let allCellStyles = '';
           Object.keys(pendingCellStyles).forEach(columnField => {
             const styles = pendingCellStyles[columnField];
             if (!styles) return;
-            
+
             // Convert styles object to CSS
             let columnStyle = '';
             if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
@@ -2199,7 +2185,7 @@ export const useGridStore = create<GridStore>()(
             if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
             if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
             if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
-            
+
             if (columnStyle) {
               allCellStyles += `
                 .ag-cell[col-id="${columnField}"],
@@ -2208,12 +2194,12 @@ export const useGridStore = create<GridStore>()(
                 }
               `;
             }
-            
+
             // Add border styles if specified
             if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
               const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
               const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
-              
+
               allCellStyles += `
                 .ag-cell[col-id="${columnField}"],
                 .ag-cell.custom-cell-${columnField} {
@@ -2222,31 +2208,31 @@ export const useGridStore = create<GridStore>()(
               `;
             }
           });
-          
+
           // Apply all styles at once
           if (headerStyleElement) {
             headerStyleElement.textContent = allHeaderStyles;
           }
-          
+
           if (cellStyleElement) {
             cellStyleElement.textContent = allCellStyles;
           }
-          
+
           // Now apply non-style settings to columns (without triggering refreshes for each)
           let needsRefresh = false;
-          
+
           columnsToProcess.forEach(columnField => {
             try {
               const profileName = `${columnField}_settings`;
               const columnSettings = settings.columnSettingsProfiles[profileName];
-              
+
               if (!columnSettings) return;
-              
+
               const column = gridApi.getColumn(columnField);
               if (!column) return;
-              
+
               const colDef = column.getColDef();
-              
+
               // Apply general settings
               if (columnSettings.general) {
                 // Set header name - ensure it's a string
@@ -2254,13 +2240,13 @@ export const useGridStore = create<GridStore>()(
                   colDef.headerName = String(columnSettings.general.headerName);
                   needsRefresh = true;
                 }
-                
+
                 // Set boolean properties with explicit conversion
                 colDef.sortable = columnSettings.general.sortable === true;
                 colDef.resizable = columnSettings.general.resizable === true;
                 colDef.editable = columnSettings.general.editable === true;
                 colDef.filter = columnSettings.general.filter === 'Enabled' ? true : false;
-                
+
                 // Apply column visibility if needed
                 const visible = !columnSettings.general.hidden;
                 if (typeof column.setVisible === 'function') {
@@ -2268,13 +2254,13 @@ export const useGridStore = create<GridStore>()(
                   needsRefresh = true;
                 }
               }
-              
+
               // Set header and cell classes (but don't apply styles - we did that in batch)
               if (columnSettings.header && columnSettings.header.applyStyles === true) {
                 colDef.headerClass = `custom-header-${columnField}`;
                 needsRefresh = true;
               }
-              
+
               if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
                 colDef.cellClass = `custom-cell-${columnField}`;
                 needsRefresh = true;
@@ -2283,30 +2269,30 @@ export const useGridStore = create<GridStore>()(
               console.error(`Error applying non-style settings for column ${columnField}:`, error);
             }
           });
-          
+
           // Apply column pinning in a separate batch to avoid race conditions
           if (gridApi && typeof gridApi.applyColumnState === 'function') {
             const pinnedColumnsState = columnsToProcess
               .map(columnField => {
                 const profileName = `${columnField}_settings`;
                 const columnSettings = settings.columnSettingsProfiles[profileName];
-                
+
                 if (!columnSettings?.general?.pinnedPosition) return null;
-                
+
                 let pinnedState = null;
                 if (columnSettings.general.pinnedPosition === 'Left') {
                   pinnedState = 'left';
                 } else if (columnSettings.general.pinnedPosition === 'Right') {
                   pinnedState = 'right';
                 }
-                
+
                 return {
                   colId: columnField,
                   pinned: pinnedState
                 };
               })
               .filter(state => state !== null);
-            
+
             if (pinnedColumnsState.length > 0) {
               try {
                 gridApi.applyColumnState({
@@ -2319,26 +2305,26 @@ export const useGridStore = create<GridStore>()(
               }
             }
           }
-          
+
           // Apply column widths in a batch if specified
           if (gridApi && typeof gridApi.applyColumnState === 'function') {
             const widthColumnsState = columnsToProcess
               .map(columnField => {
                 const profileName = `${columnField}_settings`;
                 const columnSettings = settings.columnSettingsProfiles[profileName];
-                
+
                 if (!columnSettings?.general?.width) return null;
-                
+
                 const width = parseInt(columnSettings.general.width, 10);
                 if (isNaN(width) || width <= 0) return null;
-                
+
                 return {
                   colId: columnField,
                   width: width
                 };
               })
               .filter(state => state !== null);
-            
+
             if (widthColumnsState.length > 0) {
               try {
                 gridApi.applyColumnState({
@@ -2350,18 +2336,18 @@ export const useGridStore = create<GridStore>()(
               }
             }
           }
-          
+
           // Single refresh at the end if needed
           if (needsRefresh) {
             // Use synchronous operation instead of setTimeout
             try {
               if (gridApi) {
                 console.log('Performing single batch refresh after applying all column profiles');
-                
+
                 if (typeof gridApi.refreshHeader === 'function') {
                   gridApi.refreshHeader();
                 }
-                
+
                 if (typeof gridApi.refreshCells === 'function') {
                   gridApi.refreshCells({ force: true });
                 }
@@ -2370,7 +2356,7 @@ export const useGridStore = create<GridStore>()(
               console.error('Error during final grid refresh:', error);
             }
           }
-          
+
           return true;
         } catch (error) {
           console.error('Error applying all column profiles:', error);
