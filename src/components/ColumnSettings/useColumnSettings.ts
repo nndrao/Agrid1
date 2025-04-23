@@ -10,7 +10,7 @@ export const filterTypes = ['Auto', 'Text', 'Number', 'Date'];
 export const fontFamilies = ['Arial', 'Calibri', 'Helvetica', 'Times New Roman'];
 export const fontSizes = ['12px', '14px', '16px', '18px', '20px'];
 export const fontWeights = ['Normal', 'Bold', 'Italic', 'Bold Italic'];
-export const borderStyles = ['Solid', 'Dashed', 'Dotted', 'Double', 'Groove', 'Ridge', 'Inset', 'Outset'];
+export const borderStyles = ['None', 'Solid', 'Dashed', 'Dotted', 'Double', 'Groove', 'Ridge', 'Inset', 'Outset'];
 export const borderSides = ['All', 'Top', 'Right', 'Bottom', 'Left'];
 
 export interface ColumnSettingsState {

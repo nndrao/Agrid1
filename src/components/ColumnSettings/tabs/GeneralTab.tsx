@@ -148,32 +148,44 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ settings, onUpdate, sele
 
         <FormField label="Sortable">
           <Switch
-            checked={settings.sortable}
-            onCheckedChange={value => handleUpdate({ sortable: value })}
+            checked={settings.sortable === true}
+            onCheckedChange={value => {
+              console.log('Sortable changed to:', value);
+              handleUpdate({ sortable: value === true });
+            }}
             className="h-4 w-7 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
           />
         </FormField>
 
         <FormField label="Resizable">
           <Switch
-            checked={settings.resizable}
-            onCheckedChange={value => handleUpdate({ resizable: value })}
+            checked={settings.resizable === true}
+            onCheckedChange={value => {
+              console.log('Resizable changed to:', value);
+              handleUpdate({ resizable: value === true });
+            }}
             className="h-4 w-7 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
           />
         </FormField>
 
         <FormField label="Hidden">
           <Switch
-            checked={settings.hidden}
-            onCheckedChange={value => handleUpdate({ hidden: value })}
+            checked={settings.hidden === true}
+            onCheckedChange={value => {
+              console.log('Hidden changed to:', value);
+              handleUpdate({ hidden: value === true });
+            }}
             className="h-4 w-7 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
           />
         </FormField>
 
         <FormField label="Editable">
           <Switch
-            checked={settings.editable}
-            onCheckedChange={value => handleUpdate({ editable: value })}
+            checked={settings.editable === true}
+            onCheckedChange={value => {
+              console.log('Editable changed to:', value);
+              handleUpdate({ editable: value === true });
+            }}
             className="h-4 w-7 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
           />
         </FormField>

@@ -135,8 +135,36 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     try {
       console.log('Grid API available in onGridReady');
       
+      // Keep a reference in window for emergency access - do this FIRST
+      if (typeof window !== 'undefined') {
+        console.log('Storing grid API in window.__gridApi for emergency access');
+        (window as any).__gridApi = params.api;
+        
+        // Also store in localStorage for persistence across sessions
+        (window as any).__hasGridApi = true;
+        
+        // Create a function to refresh the grid API (for emergency recovery)
+        (window as any).__refreshGridApi = () => {
+          console.log('Emergency refreshing grid API reference');
+          setGridApi(params.api);
+          return 'Grid API refreshed successfully';
+        };
+      }
+      
       // Set up grid API reference in the store
+      console.log('Setting grid API reference in store - this should be saved');
       setGridApi(params.api);
+      
+      // Double-check after a short delay that the gridApi was properly saved
+      setTimeout(() => {
+        const savedApi = useGridStore.getState().gridApi;
+        if (!savedApi) {
+          console.warn('Grid API not properly saved in store, attempting emergency save');
+          setGridApi(params.api);
+        } else {
+          console.log('Grid API successfully saved in store');
+        }
+      }, 100);
 
       // Apply current settings to grid - using a longer delay
       // to ensure grid API is fully initialized and registered in store
@@ -149,10 +177,28 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         setTimeout(() => {
           console.log('Now applying column profiles');
           if (params.api) {
+            // Use the window API reference to ensure we have the latest
+            if (typeof window !== 'undefined') {
+              console.log('Setting latest API reference before applying profiles');
+              (window as any).__gridApi = params.api;
+            }
+            
+            // Refresh grid API in store
+            setGridApi(params.api);
+            
+            // Now apply profiles
             applyAllProfiles();
+            
+            // Force a column refresh to ensure styles are applied
+            setTimeout(() => {
+              if (params.api && typeof params.api.refreshCells === 'function') {
+                console.log('Performing final cell refresh after applying profiles');
+                params.api.refreshCells({ force: true });
+              }
+            }, 300);
           }
-        }, 200);
-      }, 100);
+        }, 500);
+      }, 200);
 
       // Set initial focus to first cell
       setTimeout(() => {

@@ -35,13 +35,54 @@ export const useApplyColumnProfiles = (gridApi: any) => {
         if (profileName.endsWith('_settings')) {
           const columnField = profileName.replace('_settings', '');
           
-          // Use the grid store's apply method
-          const success = gridStore.applyColumnSettings(columnField);
-          
-          if (success) {
-            console.log(`Successfully applied settings for column ${columnField}`);
-          } else {
-            console.warn(`Failed to apply settings for column ${columnField}`);
+          try {
+            console.log(`Applying settings for column ${columnField} from profile`);
+            // Use the grid store's apply method
+            const success = gridStore.applyColumnSettings(columnField);
+            
+            if (success) {
+              console.log(`Successfully applied settings for column ${columnField}`);
+            } else {
+              console.warn(`Failed to apply settings for column ${columnField}`);
+              
+              // Try direct application as fallback
+              console.log(`Attempting direct application fallback for ${columnField}`);
+              if (gridApi && typeof gridApi.getColumn === 'function') {
+                const column = gridApi.getColumn(columnField);
+                if (column) {
+                  const columnSettings = gridStore.getColumnSettings(columnField);
+                  if (columnSettings) {
+                    console.log(`Found settings for direct application to ${columnField}:`, columnSettings);
+                    
+                    // Apply some basic settings directly
+                    const colDef = column.getColDef();
+                    if (columnSettings.general) {
+                      if (columnSettings.general.headerName) {
+                        colDef.headerName = columnSettings.general.headerName;
+                        console.log(`Set headerName to ${colDef.headerName}`);
+                      }
+                      
+                      if (columnSettings.general.width) {
+                        const width = parseInt(columnSettings.general.width, 10);
+                        if (!isNaN(width) && width > 0) {
+                          colDef.width = width;
+                          console.log(`Set width to ${width}px`);
+                        }
+                      }
+                    }
+                    
+                    // Force a column update
+                    if (typeof gridApi.refreshHeader === 'function') {
+                      gridApi.refreshHeader();
+                    }
+                    
+                    console.log('Direct fallback application completed');
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`Error applying settings for column ${columnField}:`, error);
           }
         }
       });

@@ -33,16 +33,10 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
           checked={settings.applyStyles}
           onCheckedChange={(checked) => {
             console.log('Apply styles changed to:', checked);
-            // CRITICAL: Most important fix - ensure the checkbox state is properly passed as a true boolean
-            // This is critical because the grid styling depends on this being a true boolean value
+            // Pass the value as a direct boolean
             const applyStyles = checked === true;
             console.log(`Setting header.applyStyles to ${applyStyles} (${typeof applyStyles})`);
-            console.log(`Original checked value was: ${checked} (${typeof checked})`);
-            
-            // We use a direct object with spread to ensure we pass a plain object with a boolean property
-            const updateObj = { applyStyles };
-            console.log('Header style update object:', updateObj);
-            handleUpdate(updateObj);
+            handleUpdate({ applyStyles });
           }}
         />
         <Label htmlFor="apply-header-styles" className="text-sm font-medium cursor-pointer">

@@ -220,9 +220,24 @@ export const useGridStore = create<GridStore>()(
         });
       },
 
-      // Set grid API
+      // Set grid API with improved persistence
       setGridApi: (api) => {
-        set({ gridApi: api });
+        console.log('Setting grid API in store:', api ? 'Valid API object' : 'Null API');
+        
+        // If we have a valid API, store it
+        if (api) {
+          // Store in a way that persists across renders
+          set({ gridApi: api });
+          
+          // Additional safety check - ensure the API actually has methods we need
+          if (typeof api.getColumn !== 'function') {
+            console.warn('Grid API missing essential methods - may be incomplete');
+          } else {
+            console.log('Valid grid API with getColumn method stored');
+          }
+        } else {
+          console.warn('Attempted to set null/undefined grid API');
+        }
       },
 
       // Profile management
@@ -1131,12 +1146,87 @@ export const useGridStore = create<GridStore>()(
       },
 
       applyColumnSettings: (columnField) => {
-        const { gridApi, settings } = get();
+        // Get fresh references to ensure we have the latest state
+        const storeState = get();
+        const gridApi = storeState.gridApi;
+        const settings = storeState.settings;
         
-        if (!gridApi) {
-          console.error('Grid API not available for applying column settings');
+        // Log detailed information about the gridApi
+        console.log('Grid API status:', {
+          available: !!gridApi,
+          hasGetColumn: gridApi && typeof gridApi.getColumn === 'function',
+          hasRefreshCells: gridApi && typeof gridApi.refreshCells === 'function'
+        });
+        
+        // Force synchronous API check with window
+        let windowHasApi = false;
+        if (typeof window !== 'undefined') {
+          windowHasApi = !!(window as any).__gridApi;
+          console.log(`Window API check: ${windowHasApi ? 'AVAILABLE' : 'NOT AVAILABLE'}`);
+        }
+        
+        // Try multiple fallback approaches to ensure we have a valid Grid API
+        let effectiveGridApi = gridApi;
+        
+        // If no gridApi in store, try emergency window backup
+        if (!effectiveGridApi && typeof window !== 'undefined') {
+          if ((window as any).__gridApi) {
+            console.log('Using emergency window.__gridApi backup for applying column settings');
+            effectiveGridApi = (window as any).__gridApi;
+            
+            // Update the store's gridApi reference for future use
+            set({ gridApi: effectiveGridApi });
+          }
+        }
+        
+        // Still no Grid API? Try one more approach - initialize a dummy API
+        if (!effectiveGridApi) {
+          console.log('No Grid API available - creating backup mechanisms');
+        }
+        
+        // If we still don't have a grid API, create a delayed retry with window backup check
+        if (!effectiveGridApi) {
+          console.error('Grid API not available for applying column settings - using delay and retry');
+          
+          // Try to refresh the API using the emergency refresh function
+          if (typeof window !== 'undefined' && typeof (window as any).__refreshGridApi === 'function') {
+            console.log('Attempting emergency grid API refresh');
+            try {
+              (window as any).__refreshGridApi();
+            } catch (err) {
+              console.warn('Emergency refresh failed:', err);
+            }
+          }
+          
+          // Create a delayed retry mechanism
+          setTimeout(() => {
+            // Check store first
+            let retryGridApi = get().gridApi;
+            
+            // Then try window backup
+            if (!retryGridApi && typeof window !== 'undefined' && (window as any).__gridApi) {
+              console.log('Using window.__gridApi on retry');
+              retryGridApi = (window as any).__gridApi;
+              
+              // Update store
+              set({ gridApi: retryGridApi });
+            }
+            
+            if (retryGridApi) {
+              console.log('Grid API now available on retry - applying settings');
+              get().applyColumnSettings(columnField);
+            } else {
+              console.error('Grid API still not available after retry');
+              // Last resort: try to close and reopen the dialog
+              console.log('Suggesting dialog reopen as last resort');
+            }
+          }, 500);
+          
           return false;
         }
+        
+        // Use the effective Grid API for operations
+        const operationalGridApi = effectiveGridApi;
         
         const profileName = `${columnField}_settings`;
         const columnSettings = settings.columnSettingsProfiles[profileName];
@@ -1147,416 +1237,846 @@ export const useGridStore = create<GridStore>()(
         }
         
         try {
-          // Get the column from grid
-          const column = gridApi.getColumn(columnField);
+          // Verify operationalGridApi is actually valid
+          if (!operationalGridApi) {
+            console.error('operationalGridApi is null or undefined even after all fallbacks');
+            
+            // Last resort: Try to get the API directly from window
+            if (typeof window !== 'undefined' && (window as any).__gridApi) {
+              console.log('LAST RESORT: Using window.__gridApi directly');
+              operationalGridApi = (window as any).__gridApi;
+            } else {
+              console.error('FATAL: Cannot obtain grid API from any source');
+              return false;
+            }
+          }
+          
+          console.log('Using operationalGridApi with methods:', {
+            getColumn: typeof operationalGridApi.getColumn === 'function',
+            refreshCells: typeof operationalGridApi.refreshCells === 'function',
+            getColDef: operationalGridApi.getColumn && typeof operationalGridApi.getColumn(columnField)?.getColDef === 'function'
+          });
+          
+          // Get the column from grid using our operational API
+          const column = operationalGridApi.getColumn(columnField);
           if (!column) {
             console.error(`Column ${columnField} not found in grid`);
+            return false;
+          }
+          
+          // Force immediate testing of critical functionality
+          try {
+            const colDef = column.getColDef();
+            console.log(`Successfully retrieved column definition for ${columnField}`, {
+              headerName: colDef.headerName || columnField,
+              editable: colDef.editable,
+              sortable: colDef.sortable
+            });
+          } catch (defError) {
+            console.error('Failed to get column definition', defError);
             return false;
           }
           
           // Get column definition
           const colDef = column.getColDef();
           
-          // Apply general settings
+          // Apply general settings with careful validation and logging
           if (columnSettings.general) {
-            colDef.headerName = columnSettings.general.headerName;
-            colDef.width = parseInt(columnSettings.general.width, 10) || undefined;
-            colDef.sortable = columnSettings.general.sortable;
-            colDef.resizable = columnSettings.general.resizable;
+            console.log('Applying general settings for column:', columnField, columnSettings.general);
+            
+            // Set header name - ensure it's a string
+            if (columnSettings.general.headerName) {
+              colDef.headerName = String(columnSettings.general.headerName);
+              console.log(`Set headerName to "${colDef.headerName}"`);
+            }
+            
+            // Set width - convert to number and verify it's a valid width
+            if (columnSettings.general.width) {
+              const width = parseInt(columnSettings.general.width, 10);
+              if (!isNaN(width) && width > 0) {
+                colDef.width = width;
+                console.log(`Set width to ${colDef.width}px`);
+              }
+            }
+            
+            // Set boolean properties with explicit conversion
+            colDef.sortable = columnSettings.general.sortable === true;
+            colDef.resizable = columnSettings.general.resizable === true;
+            colDef.editable = columnSettings.general.editable === true;
             colDef.filter = columnSettings.general.filter === 'Enabled' ? true : false;
-            colDef.editable = columnSettings.general.editable;
             
-            // Handle column type
-            if (columnSettings.general.columnType === 'Number') {
-              colDef.type = 'customNumeric';
-              colDef.filter = 'agNumberColumnFilter';
-            } else if (columnSettings.general.columnType === 'Date') {
-              colDef.type = 'customDate';
-              colDef.filter = 'agDateColumnFilter';
-            } else if (columnSettings.general.columnType === 'String') {
-              colDef.type = undefined;
-              colDef.filter = 'agTextColumnFilter';
+            console.log('Applied boolean properties:', {
+              sortable: colDef.sortable,
+              resizable: colDef.resizable,
+              editable: colDef.editable,
+              filter: colDef.filter
+            });
+            
+            // Handle column type with explicit case handling
+            if (columnSettings.general.columnType) {
+              console.log(`Setting column type to ${columnSettings.general.columnType}`);
+              
+              switch (columnSettings.general.columnType) {
+                case 'Number':
+                  colDef.type = 'customNumeric';
+                  colDef.filter = 'agNumberColumnFilter';
+                  break;
+                case 'Date':
+                  colDef.type = 'customDate';
+                  colDef.filter = 'agDateColumnFilter';
+                  break;
+                case 'String':
+                  colDef.type = undefined;
+                  colDef.filter = 'agTextColumnFilter';
+                  break;
+                default:
+                  // Default type
+                  colDef.type = undefined;
+              }
             }
             
-            // Handle filter type
-            if (columnSettings.general.filter === 'Enabled' && columnSettings.general.filterType !== 'Auto') {
-              if (columnSettings.general.filterType === 'Text') colDef.filter = 'agTextColumnFilter';
-              if (columnSettings.general.filterType === 'Number') colDef.filter = 'agNumberColumnFilter';
-              if (columnSettings.general.filterType === 'Date') colDef.filter = 'agDateColumnFilter';
+            // Handle filter type with proper validation
+            if (columnSettings.general.filter === 'Enabled' && columnSettings.general.filterType) {
+              console.log(`Setting filter type to ${columnSettings.general.filterType}`);
+              
+              switch (columnSettings.general.filterType) {
+                case 'Text':
+                  colDef.filter = 'agTextColumnFilter';
+                  break;
+                case 'Number':
+                  colDef.filter = 'agNumberColumnFilter';
+                  break;
+                case 'Date':
+                  colDef.filter = 'agDateColumnFilter';
+                  break;
+                // Auto or default - already handled
+              }
             }
             
-            // Apply column visibility
+            // Apply column visibility via API
             if (typeof column.setVisible === 'function') {
-              column.setVisible(!columnSettings.general.hidden);
+              const visible = !columnSettings.general.hidden;
+              console.log(`Setting column visibility to ${visible ? 'visible' : 'hidden'}`);
+              column.setVisible(visible);
             }
             
-            // Apply column pinned state
-            if (typeof column.setPinned === 'function') {
-              let pinnedState = null;
-              if (columnSettings.general.pinnedPosition === 'Left') pinnedState = 'left';
-              if (columnSettings.general.pinnedPosition === 'Right') pinnedState = 'right';
-              column.setPinned(pinnedState);
+            // Apply column pinned state with multiple fallback methods
+            const colId = column.getColId();
+            let pinnedState = null;
+            
+            if (columnSettings.general.pinnedPosition === 'Left') {
+              pinnedState = 'left';
+            } else if (columnSettings.general.pinnedPosition === 'Right') {
+              pinnedState = 'right';
+            }
+            
+            console.log(`Setting column pinned state to ${pinnedState || 'not pinned'}`);
+            
+            // MOST RELIABLE METHOD: Use applyColumnState - works across all modern AG-Grid versions
+            try {
+              if (typeof operationalGridApi.applyColumnState === 'function') {
+                console.log('Using most reliable method: applyColumnState');
+                
+                const state = [{
+                  colId: colId,
+                  pinned: pinnedState
+                }];
+                
+                operationalGridApi.applyColumnState({ 
+                  state: state,
+                  defaultState: { pinned: null }
+                });
+                
+                console.log('Successfully applied pinned state via applyColumnState');
+              }
+            } catch (err) {
+              console.error('Error using applyColumnState:', err);
+              
+              // Try alternative methods if the primary one fails
+              // OPTION 1: Try using direct column API method
+              try {
+                if (typeof column.setPinned === 'function') {
+                  console.log('Using column.setPinned method');
+                  column.setPinned(pinnedState);
+                  console.log('Successfully applied pinned state via column.setPinned');
+                }
+              } catch (err) {
+                console.error('Error using column.setPinned:', err);
+                
+                // OPTION 2: Try new direct API method (AG-Grid 27+)
+                try {
+                  if (typeof operationalGridApi.setColumnPinned === 'function') {
+                    console.log('Using api.setColumnPinned method');
+                    operationalGridApi.setColumnPinned(colId, pinnedState);
+                    console.log('Successfully applied pinned state via api.setColumnPinned');
+                  }
+                } catch (err) {
+                  console.error('Error using api.setColumnPinned:', err);
+                  
+                  // OPTION 3: Try column model (internal AG-Grid structure)
+                  try {
+                    if (operationalGridApi.columnModel && typeof operationalGridApi.columnModel.setColumnPinned === 'function') {
+                      console.log('Using columnModel.setColumnPinned method');
+                      operationalGridApi.columnModel.setColumnPinned(colId, pinnedState);
+                      console.log('Successfully applied pinned state via columnModel');
+                    }
+                  } catch (err) {
+                    console.error('Error using columnModel:', err);
+                    
+                    // OPTION 4: Try column controller (older AG-Grid versions)
+                    try {
+                      if (operationalGridApi.columnController && typeof operationalGridApi.columnController.setColumnPinned === 'function') {
+                        console.log('Using columnController.setColumnPinned method');
+                        operationalGridApi.columnController.setColumnPinned(colId, pinnedState);
+                        console.log('Successfully applied pinned state via columnController');
+                      }
+                    } catch (err) {
+                      console.error('Error using columnController:', err);
+                      console.warn('All pinning methods failed. Column may not be pinned correctly.');
+                    }
+                  }
+                }
+              }
             }
           }
           
-          // Apply header styles - ensure we're checking a boolean value with explicit comparison
+          // Helper functions for applying individual style properties
+          const applyHeaderStyleProperty = (property: string, value: any) => {
+            // Create a unique style ID for this specific property and column
+            const styleId = `header-${property}-${columnField}`;
+            
+            // Remove any existing style element for this property
+            const existingStyle = document.getElementById(styleId);
+            if (existingStyle) {
+              existingStyle.remove();
+            }
+            
+            // If no value provided, we're removing this style property - just return
+            if (!value) return;
+            
+            // Create a new style element for just this property
+            const styleElement = document.createElement('style');
+            styleElement.id = styleId;
+            
+            // Convert property to CSS format (e.g., fontFamily -> font-family)
+            const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
+            
+            // Choose the right CSS value based on property type
+            let cssValue = '';
+            switch (property) {
+              case 'fontFamily':
+                cssValue = value;
+                break;
+              case 'fontSize':
+                cssValue = value;
+                break;
+              case 'textColor':
+                cssValue = value;
+                property = 'color'; // Override property name for color
+                break;
+              case 'backgroundColor':
+                cssValue = value;
+                break;
+              case 'alignH':
+                cssValue = value;
+                property = 'textAlign'; // Override property name for alignment
+                break;
+              case 'bold':
+                cssValue = value ? 'bold' : 'normal';
+                property = 'fontWeight'; // Override property name for bold
+                break;
+              case 'italic':
+                cssValue = value ? 'italic' : 'normal';
+                property = 'fontStyle'; // Override property name for italic
+                break;
+              case 'underline':
+                cssValue = value ? 'underline' : 'none';
+                property = 'textDecoration'; // Override property name for underline
+                break;
+              default:
+                cssValue = value;
+            }
+            
+            // Generate the CSS with maximum specificity selectors
+            styleElement.textContent = `
+              /* Basic theme selectors */
+              .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+              .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
+              
+              /* Class-based selectors */
+              .ag-theme-quartz .ag-header-cell.custom-header-${columnField},
+              .ag-theme-quartz-dark .ag-header-cell.custom-header-${columnField},
+              
+              /* Attribute selector variations for better match */
+              [col-id="${columnField}"].ag-header-cell,
+              .ag-header-cell[col-id="${columnField}"],
+              
+              /* Full path selectors with high specificity */
+              div.ag-theme-quartz .ag-header .ag-header-row .ag-header-cell[col-id="${columnField}"],
+              div.ag-theme-quartz-dark .ag-header .ag-header-row .ag-header-cell[col-id="${columnField}"] { 
+                ${cssProperty}: ${cssValue} !important; 
+              }
+            `;
+            
+            // Add special handling for text alignment
+            if (property === 'textAlign') {
+              styleElement.textContent += `
+                /* Target header label explicitly for alignment - multiple selectors */
+                .ag-theme-quartz .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
+                .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
+                .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
+                [col-id="${columnField}"].ag-header-cell .ag-header-cell-label,
+                div.ag-theme-quartz .ag-header .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
+                div.ag-theme-quartz-dark .ag-header .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label {
+                  justify-content: ${value === 'left' ? 'flex-start' : 
+                                    value === 'center' ? 'center' : 'flex-end'} !important;
+                }
+              `;
+            }
+            
+            // Add the style to the document
+            document.head.appendChild(styleElement);
+            console.log(`Applied header ${cssProperty} style for column ${columnField}: ${cssValue}`);
+          };
+          
+          const applyCellStyleProperty = (property: string, value: any) => {
+            // Create a unique style ID for this specific property and column
+            const styleId = `cell-${property}-${columnField}`;
+            
+            // Remove any existing style element for this property
+            const existingStyle = document.getElementById(styleId);
+            if (existingStyle) {
+              existingStyle.remove();
+            }
+            
+            // If no value provided, we're removing this style property - just return
+            if (!value) return;
+            
+            // Create a new style element for just this property
+            const styleElement = document.createElement('style');
+            styleElement.id = styleId;
+            
+            // Convert property to CSS format (e.g., fontFamily -> font-family)
+            const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
+            
+            // Choose the right CSS value based on property type
+            let cssValue = '';
+            switch (property) {
+              case 'fontFamily':
+                cssValue = value;
+                break;
+              case 'fontSize':
+                cssValue = value;
+                break;
+              case 'textColor':
+                cssValue = value;
+                property = 'color'; // Override property name for color
+                break;
+              case 'backgroundColor':
+                cssValue = value;
+                break;
+              case 'alignH':
+                cssValue = value;
+                property = 'textAlign'; // Override property name for alignment
+                break;
+              case 'bold':
+                cssValue = value ? 'bold' : 'normal';
+                property = 'fontWeight'; // Override property name for bold
+                break;
+              case 'italic':
+                cssValue = value ? 'italic' : 'normal';
+                property = 'fontStyle'; // Override property name for italic
+                break;
+              case 'underline':
+                cssValue = value ? 'underline' : 'none';
+                property = 'textDecoration'; // Override property name for underline
+                break;
+              default:
+                cssValue = value;
+            }
+            
+            // Generate the CSS with maximum specificity selectors
+            styleElement.textContent = `
+              /* Basic selectors */
+              .ag-theme-quartz .ag-cell[col-id="${columnField}"], 
+              .ag-theme-quartz-dark .ag-cell[col-id="${columnField}"],
+              
+              /* Class-based selectors */
+              .ag-theme-quartz .ag-cell.custom-cell-${columnField},
+              .ag-theme-quartz-dark .ag-cell.custom-cell-${columnField},
+              
+              /* Nested selectors for better specificity */
+              .ag-theme-quartz .ag-row .ag-cell[col-id="${columnField}"],
+              .ag-theme-quartz-dark .ag-row .ag-cell[col-id="${columnField}"],
+              
+              /* Attribute selector variations */
+              [col-id="${columnField}"].ag-cell,
+              
+              /* Full path selectors - highest specificity */
+              div.ag-theme-quartz .ag-center-cols-clipper .ag-center-cols-viewport .ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"],
+              div.ag-theme-quartz-dark .ag-center-cols-clipper .ag-center-cols-viewport .ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"] { 
+                ${cssProperty}: ${cssValue} !important; 
+              }
+            `;
+            
+            // Add the style to the document
+            document.head.appendChild(styleElement);
+            console.log(`Applied cell ${cssProperty} style for column ${columnField}: ${cssValue}`);
+          };
+          
+          const applyHeaderBorderStyle = (side: string, style: string, width: number, color: string) => {
+            // First, explicitly clear ALL border styles for this column to avoid conflicts
+            ['All', 'Top', 'Right', 'Bottom', 'Left'].forEach(borderSide => {
+              const existingStyleId = `header-border-${borderSide}-${columnField}`;
+              const existingEl = document.getElementById(existingStyleId);
+              if (existingEl) {
+                console.log(`Removing existing header border style for ${borderSide}`);
+                existingEl.remove();
+              }
+            });
+            
+            // Create a style element that resets ALL borders first
+            const resetStyleElement = document.createElement('style');
+            resetStyleElement.id = `header-border-reset-${columnField}`;
+            resetStyleElement.textContent = `
+              /* Reset all borders with maximum specificity */
+              .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+              .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
+              [col-id="${columnField}"].ag-header-cell,
+              .ag-header-cell[col-id="${columnField}"],
+              div.ag-theme-quartz .ag-header .ag-header-row .ag-header-cell[col-id="${columnField}"],
+              div.ag-theme-quartz-dark .ag-header .ag-header-row .ag-header-cell[col-id="${columnField}"] { 
+                border: none !important;
+                border-top: none !important;
+                border-right: none !important;
+                border-bottom: none !important;
+                border-left: none !important;
+              }
+            `;
+            document.head.appendChild(resetStyleElement);
+            
+            // Create a unique style ID for border of this column and side
+            const styleId = `header-border-${side}-${columnField}`;
+            
+            // Handle the 'None' border style option - in this case, we're done after the reset
+            if (style === 'None') {
+              console.log(`Applied header border style for column ${columnField}: none (all borders explicitly removed)`);
+              return;
+            }
+            
+            // If no values provided, we're removing this style property - just return after the reset
+            if (!style || !width || !color) return;
+            
+            // Create a new style element for just this border
+            const styleElement = document.createElement('style');
+            styleElement.id = styleId;
+            
+            // Generate the border style string
+            const borderStyle = `${width}px ${style.toLowerCase()} ${color}`;
+            const borderProperty = side === 'All' ? 'border' : `border-${side.toLowerCase()}`;
+            
+            // Generate the CSS with maximum specificity selectors
+            styleElement.textContent = `
+              /* Basic theme selectors */
+              .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+              .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
+              
+              /* Class-based selectors */
+              .ag-theme-quartz .ag-header-cell.custom-header-${columnField},
+              .ag-theme-quartz-dark .ag-header-cell.custom-header-${columnField},
+              
+              /* Attribute selector variations for better match */
+              [col-id="${columnField}"].ag-header-cell,
+              .ag-header-cell[col-id="${columnField}"],
+              
+              /* Full path selectors with high specificity */
+              div.ag-theme-quartz .ag-header .ag-header-row .ag-header-cell[col-id="${columnField}"],
+              div.ag-theme-quartz-dark .ag-header .ag-header-row .ag-header-cell[col-id="${columnField}"] { 
+                ${borderProperty}: ${borderStyle} !important; 
+              }
+            `;
+            
+            // Add the style to the document
+            document.head.appendChild(styleElement);
+            console.log(`Applied header ${borderProperty} style for column ${columnField}: ${borderStyle}`);
+          };
+          
+          const applyCellBorderStyle = (side: string, style: string, width: number, color: string) => {
+            // First, explicitly clear ALL border styles for this column to avoid conflicts
+            ['All', 'Top', 'Right', 'Bottom', 'Left'].forEach(borderSide => {
+              const existingStyleId = `cell-border-${borderSide}-${columnField}`;
+              const existingEl = document.getElementById(existingStyleId);
+              if (existingEl) {
+                console.log(`Removing existing cell border style for ${borderSide}`);
+                existingEl.remove();
+              }
+            });
+            
+            // Create a style element that resets ALL borders first
+            const resetStyleElement = document.createElement('style');
+            resetStyleElement.id = `cell-border-reset-${columnField}`;
+            resetStyleElement.textContent = `
+              /* Reset all borders with maximum specificity */
+              .ag-theme-quartz .ag-cell[col-id="${columnField}"], 
+              .ag-theme-quartz-dark .ag-cell[col-id="${columnField}"],
+              [col-id="${columnField}"].ag-cell,
+              .ag-row .ag-cell[col-id="${columnField}"],
+              div.ag-theme-quartz .ag-center-cols-clipper .ag-center-cols-viewport .ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"],
+              div.ag-theme-quartz-dark .ag-center-cols-clipper .ag-center-cols-viewport .ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"] { 
+                border: none !important;
+                border-top: none !important;
+                border-right: none !important;
+                border-bottom: none !important;
+                border-left: none !important;
+              }
+            `;
+            document.head.appendChild(resetStyleElement);
+            
+            // Create a unique style ID for border of this column and side
+            const styleId = `cell-border-${side}-${columnField}`;
+            
+            // Handle the 'None' border style option - in this case, we're done after the reset
+            if (style === 'None') {
+              console.log(`Applied cell border style for column ${columnField}: none (all borders explicitly removed)`);
+              return;
+            }
+            
+            // If no values provided, we're removing this style property - just return after the reset
+            if (!style || !width || !color) return;
+            
+            // Create a new style element for just this border
+            const styleElement = document.createElement('style');
+            styleElement.id = styleId;
+            
+            // Generate the border style string
+            const borderStyle = `${width}px ${style.toLowerCase()} ${color}`;
+            const borderProperty = side === 'All' ? 'border' : `border-${side.toLowerCase()}`;
+            
+            // Generate the CSS with maximum specificity selectors
+            styleElement.textContent = `
+              /* Basic selectors */
+              .ag-theme-quartz .ag-cell[col-id="${columnField}"], 
+              .ag-theme-quartz-dark .ag-cell[col-id="${columnField}"],
+              
+              /* Class-based selectors */
+              .ag-theme-quartz .ag-cell.custom-cell-${columnField},
+              .ag-theme-quartz-dark .ag-cell.custom-cell-${columnField},
+              
+              /* Nested selectors for better specificity */
+              .ag-theme-quartz .ag-row .ag-cell[col-id="${columnField}"],
+              .ag-theme-quartz-dark .ag-row .ag-cell[col-id="${columnField}"],
+              
+              /* Attribute selector variations */
+              [col-id="${columnField}"].ag-cell,
+              
+              /* Full path selectors - highest specificity */
+              div.ag-theme-quartz .ag-center-cols-clipper .ag-center-cols-viewport .ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"],
+              div.ag-theme-quartz-dark .ag-center-cols-clipper .ag-center-cols-viewport .ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"] { 
+                ${borderProperty}: ${borderStyle} !important; 
+              }
+            `;
+            
+            // Add the style to the document
+            document.head.appendChild(styleElement);
+            console.log(`Applied cell ${borderProperty} style for column ${columnField}: ${borderStyle}`);
+          };
+          
+          const resetHeaderStyle = (property: string) => {
+            // Create a unique reset style ID for this specific property and column
+            const styleId = `header-${property}-${columnField}`;
+            
+            // Remove any existing style element for this property
+            const existingStyle = document.getElementById(styleId);
+            if (existingStyle) {
+              existingStyle.remove();
+            }
+            
+            // For border styles, we need to clear each side that could be set
+            if (property === 'border') {
+              // Clear all border sides
+              ['All', 'Top', 'Right', 'Bottom', 'Left'].forEach(side => {
+                const borderStyleId = `header-border-${side}-${columnField}`;
+                const borderStyle = document.getElementById(borderStyleId);
+                if (borderStyle) {
+                  borderStyle.remove();
+                }
+              });
+              
+              // Create a reset style to ensure borders are completely removed
+              const resetElement = document.createElement('style');
+              resetElement.id = `header-border-reset-${columnField}`;
+              resetElement.textContent = `
+                /* Reset all borders */
+                .ag-header-cell[col-id="${columnField}"],
+                [col-id="${columnField}"].ag-header-cell,
+                div.ag-header .ag-header-cell[col-id="${columnField}"] {
+                  border: none !important;
+                  border-top: none !important;
+                  border-right: none !important;
+                  border-bottom: none !important;
+                  border-left: none !important;
+                }
+              `;
+              document.head.appendChild(resetElement);
+              
+              // Remove the reset style after a delay to ensure it takes effect
+              setTimeout(() => {
+                try {
+                  const resetEl = document.getElementById(`header-border-reset-${columnField}`);
+                  if (resetEl) resetEl.remove();
+                } catch (e) {
+                  // Ignore
+                }
+              }, 500);
+            }
+            
+            console.log(`Reset header ${property} style for column ${columnField}`);
+          };
+          
+          const resetCellStyle = (property: string) => {
+            // Create a unique reset style ID for this specific property and column
+            const styleId = `cell-${property}-${columnField}`;
+            
+            // Remove any existing style element for this property
+            const existingStyle = document.getElementById(styleId);
+            if (existingStyle) {
+              existingStyle.remove();
+            }
+            
+            // For border styles, we need to clear each side that could be set
+            if (property === 'border') {
+              // Clear all border sides
+              ['All', 'Top', 'Right', 'Bottom', 'Left'].forEach(side => {
+                const borderStyleId = `cell-border-${side}-${columnField}`;
+                const borderStyle = document.getElementById(borderStyleId);
+                if (borderStyle) {
+                  borderStyle.remove();
+                }
+              });
+              
+              // Create a reset style to ensure borders are completely removed
+              const resetElement = document.createElement('style');
+              resetElement.id = `cell-border-reset-${columnField}`;
+              resetElement.textContent = `
+                /* Reset all borders */
+                .ag-cell[col-id="${columnField}"],
+                [col-id="${columnField}"].ag-cell,
+                .ag-row .ag-cell[col-id="${columnField}"],
+                div.ag-center-cols-container .ag-row .ag-cell[col-id="${columnField}"] {
+                  border: none !important;
+                  border-top: none !important;
+                  border-right: none !important;
+                  border-bottom: none !important;
+                  border-left: none !important;
+                }
+              `;
+              document.head.appendChild(resetElement);
+              
+              // Remove the reset style after a delay to ensure it takes effect
+              setTimeout(() => {
+                try {
+                  const resetEl = document.getElementById(`cell-border-reset-${columnField}`);
+                  if (resetEl) resetEl.remove();
+                } catch (e) {
+                  // Ignore
+                }
+              }, 500);
+            }
+            
+            console.log(`Reset cell ${property} style for column ${columnField}`);
+          };
+          
+          // Reset all header styles first
+          const resetAllHeaderStyles = () => {
+            // Common style properties that need to be reset
+            const headerStyleProps = [
+              'fontFamily', 'fontSize', 'bold', 'italic', 'underline', 
+              'textColor', 'backgroundColor', 'alignH', 'border'
+            ];
+            
+            // Reset each property
+            headerStyleProps.forEach(prop => resetHeaderStyle(prop));
+            
+            // Remove header class
+            if (colDef.headerClass) {
+              console.log('Removing headerClass from colDef');
+              colDef.headerClass = undefined;
+            }
+            
+            // Remove any master style elements
+            const masterStyleIds = [
+              `header-style-${columnField}`,
+              `emergency-header-style-${columnField}`,
+              `direct-header-style-${columnField}`
+            ];
+            
+            masterStyleIds.forEach(id => {
+              const styleElement = document.getElementById(id);
+              if (styleElement) {
+                console.log(`Removing header style element: ${id}`);
+                styleElement.remove();
+              }
+            });
+          };
+          
+          // Reset all cell styles first
+          const resetAllCellStyles = () => {
+            // Common style properties that need to be reset
+            const cellStyleProps = [
+              'fontFamily', 'fontSize', 'bold', 'italic', 'underline', 
+              'textColor', 'backgroundColor', 'alignH', 'border'
+            ];
+            
+            // Reset each property
+            cellStyleProps.forEach(prop => resetCellStyle(prop));
+            
+            // Remove cell class
+            if (colDef.cellClass) {
+              console.log('Removing cellClass from colDef');
+              colDef.cellClass = undefined;
+            }
+            
+            // Remove any master style elements
+            const masterStyleIds = [
+              `cell-style-${columnField}`,
+              `emergency-cell-style-${columnField}`,
+              `direct-cell-style-${columnField}`
+            ];
+            
+            masterStyleIds.forEach(id => {
+              const styleElement = document.getElementById(id);
+              if (styleElement) {
+                console.log(`Removing cell style element: ${id}`);
+                styleElement.remove();
+              }
+            });
+          };
+          
+          // Apply header styles with individual property control
           if (columnSettings.header && columnSettings.header.applyStyles === true) {
             console.log(`Applying header styles for column ${columnField} - header.applyStyles is ${columnSettings.header.applyStyles}`);
             
-            // Don't use headerClass property as it can be inconsistent
-            // Instead, we'll apply styles directly via DOM after a small delay
+            // Use AG Grid's headerClass property
+            colDef.headerClass = `custom-header-${columnField}`;
             
-            // Create CSS for the header
-            let headerStyle = '';
+            // Apply individual style properties
             const header = columnSettings.header;
             
-            if (header.fontFamily) headerStyle += `font-family: ${header.fontFamily}; `;
-            if (header.fontSize) headerStyle += `font-size: ${header.fontSize}; `;
-            if (header.bold) headerStyle += 'font-weight: bold; ';
-            if (header.italic) headerStyle += 'font-style: italic; ';
-            if (header.underline) headerStyle += 'text-decoration: underline; ';
-            if (header.textColor) headerStyle += `color: ${header.textColor}; `;
-            if (header.backgroundColor) headerStyle += `background-color: ${header.backgroundColor}; `;
-            if (header.alignH) headerStyle += `text-align: ${header.alignH}; `;
+            // Apply each style property individually 
+            if (header.fontFamily) applyHeaderStyleProperty('fontFamily', header.fontFamily);
+            if (header.fontSize) applyHeaderStyleProperty('fontSize', header.fontSize);
+            if (header.bold === true) applyHeaderStyleProperty('bold', true);
+            if (header.italic === true) applyHeaderStyleProperty('italic', true);
+            if (header.underline === true) applyHeaderStyleProperty('underline', true);
+            if (header.textColor) applyHeaderStyleProperty('textColor', header.textColor);
+            if (header.backgroundColor) applyHeaderStyleProperty('backgroundColor', header.backgroundColor);
+            if (header.alignH) applyHeaderStyleProperty('alignH', header.alignH);
             
-            // Add border styles
+            // Apply border styles
             if (header.borderStyle && header.borderWidth && header.borderColor) {
-              const borderStyle = `${header.borderWidth}px ${header.borderStyle.toLowerCase()} ${header.borderColor}`;
+              // First reset all borders to ensure clean state
+              resetHeaderStyle('border');
               
-              if (header.borderSides === 'All') {
-                headerStyle += `border: ${borderStyle}; `;
-              } else if (header.borderSides === 'Top') {
-                headerStyle += `border-top: ${borderStyle}; `;
-              } else if (header.borderSides === 'Right') {
-                headerStyle += `border-right: ${borderStyle}; `;
-              } else if (header.borderSides === 'Bottom') {
-                headerStyle += `border-bottom: ${borderStyle}; `;
-              } else if (header.borderSides === 'Left') {
-                headerStyle += `border-left: ${borderStyle}; `;
+              console.log(`Adding header border style: ${header.borderStyle} ${header.borderWidth}px ${header.borderColor} for sides: ${header.borderSides}`);
+              
+              // Apply specific border side
+              if (header.borderSides) {
+                applyHeaderBorderStyle(
+                  header.borderSides, 
+                  header.borderStyle, 
+                  header.borderWidth, 
+                  header.borderColor
+                );
               }
-            }
-            
-            // Apply the header CSS
-            if (headerStyle) {
-              console.log(`Header style for ${columnField}:`, headerStyle);
-              
-              // First approach: Create an ID-based stylesheet
-              let styleElement = document.getElementById(`header-style-${columnField}`);
-              if (!styleElement) {
-                styleElement = document.createElement('style');
-                styleElement.id = `header-style-${columnField}`;
-                document.head.appendChild(styleElement);
-              }
-              
-              // Use extremely specific selectors
-              const cssContent = `
-                /* AG Grid header styles for column ${columnField} */
-                .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
-                .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
-                .ag-theme-quartz [col-id="${columnField}"].ag-header-cell,
-                .ag-theme-quartz-dark [col-id="${columnField}"].ag-header-cell,
-                div.ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
-                div.ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
-                div.ag-theme-quartz [col-id="${columnField}"].ag-header-cell,
-                div.ag-theme-quartz-dark [col-id="${columnField}"].ag-header-cell,
-                .ag-theme-quartz [aria-colindex="${columnField}"].ag-header-cell,
-                .ag-theme-quartz-dark [aria-colindex="${columnField}"].ag-header-cell {
-                  ${headerStyle} !important;
-                }`;
-              
-              styleElement.textContent = cssContent;
-              console.log(`Applied CSS to stylesheet: ${cssContent}`);
-              
-              // Second approach: Direct DOM manipulation with a delay
-              setTimeout(() => {
-                try {
-                  // Find all header cells for this column and apply styles directly
-                  const headerCells = document.querySelectorAll(`.ag-header-cell[col-id="${columnField}"]`);
-                  console.log(`Found ${headerCells.length} header cells for column ${columnField}`);
-                  
-                  headerCells.forEach((cell) => {
-                    console.log(`Applying direct styles to header cell for ${columnField}`);
-                    
-                    // Apply each style property directly to the element
-                    if (header.fontFamily) cell.style.fontFamily = header.fontFamily;
-                    if (header.fontSize) cell.style.fontSize = header.fontSize;
-                    if (header.bold) cell.style.fontWeight = 'bold';
-                    if (header.italic) cell.style.fontStyle = 'italic';
-                    if (header.underline) cell.style.textDecoration = 'underline';
-                    if (header.textColor) cell.style.color = header.textColor;
-                    if (header.backgroundColor) cell.style.backgroundColor = header.backgroundColor;
-                    if (header.alignH) cell.style.textAlign = header.alignH;
-                    
-                    // Add data attribute to mark as styled
-                    cell.setAttribute('data-styled', 'true');
-                    cell.setAttribute('data-style-version', Date.now().toString());
-                  });
-                } catch (error) {
-                  console.error('Error directly applying header styles:', error);
-                }
-              }, 150);
             }
           } else {
-            // Remove any existing header styles
+            // Remove all header styles
             console.log(`Removing header styles for column ${columnField}`);
-            const styleElement = document.getElementById(`header-style-${columnField}`);
-            if (styleElement) styleElement.remove();
-            
-            // Remove inline styles
-            setTimeout(() => {
-              try {
-                const headerCells = document.querySelectorAll(`.ag-header-cell[col-id="${columnField}"]`);
-                headerCells.forEach((cell) => {
-                  cell.removeAttribute('style');
-                  cell.removeAttribute('data-styled');
-                });
-              } catch (error) {
-                console.error('Error removing header styles:', error);
-              }
-            }, 150);
+            resetAllHeaderStyles();
           }
           
-          // Apply cell styles - ensure we're checking a boolean value with explicit comparison
+          // Apply cell styles with individual property control
           if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
             console.log(`Applying cell styles for column ${columnField} - cell.applyStyles is ${columnSettings.cell.applyStyles}`);
             
-            // Don't use cellClass property as it can be inconsistent
-            // Instead, we'll apply styles directly via DOM after a small delay
+            // Use AG Grid's cellClass property
+            colDef.cellClass = `custom-cell-${columnField}`;
             
-            // Create CSS for the cells
-            let cellStyle = '';
+            // Apply individual style properties
             const cell = columnSettings.cell;
             
-            if (cell.fontFamily) cellStyle += `font-family: ${cell.fontFamily}; `;
-            if (cell.fontSize) cellStyle += `font-size: ${cell.fontSize}; `;
-            if (cell.bold) cellStyle += 'font-weight: bold; ';
-            if (cell.italic) cellStyle += 'font-style: italic; ';
-            if (cell.underline) cellStyle += 'text-decoration: underline; ';
-            if (cell.textColor) cellStyle += `color: ${cell.textColor}; `;
-            if (cell.backgroundColor) cellStyle += `background-color: ${cell.backgroundColor}; `;
-            if (cell.alignH) cellStyle += `text-align: ${cell.alignH}; `;
+            // Apply each style property individually
+            if (cell.fontFamily) applyCellStyleProperty('fontFamily', cell.fontFamily);
+            if (cell.fontSize) applyCellStyleProperty('fontSize', cell.fontSize);
+            if (cell.bold === true) applyCellStyleProperty('bold', true);
+            if (cell.italic === true) applyCellStyleProperty('italic', true);
+            if (cell.underline === true) applyCellStyleProperty('underline', true);
+            if (cell.textColor) applyCellStyleProperty('textColor', cell.textColor);
+            if (cell.backgroundColor) applyCellStyleProperty('backgroundColor', cell.backgroundColor);
+            if (cell.alignH) applyCellStyleProperty('alignH', cell.alignH);
             
-            // Add border styles
+            // Apply border styles
             if (cell.borderStyle && cell.borderWidth && cell.borderColor) {
-              const borderStyle = `${cell.borderWidth}px ${cell.borderStyle.toLowerCase()} ${cell.borderColor}`;
+              // First reset all borders to ensure clean state
+              resetCellStyle('border');
               
-              if (cell.borderSides === 'All') {
-                cellStyle += `border: ${borderStyle}; `;
-              } else if (cell.borderSides === 'Top') {
-                cellStyle += `border-top: ${borderStyle}; `;
-              } else if (cell.borderSides === 'Right') {
-                cellStyle += `border-right: ${borderStyle}; `;
-              } else if (cell.borderSides === 'Bottom') {
-                cellStyle += `border-bottom: ${borderStyle}; `;
-              } else if (cell.borderSides === 'Left') {
-                cellStyle += `border-left: ${borderStyle}; `;
+              console.log(`Adding cell border style: ${cell.borderStyle} ${cell.borderWidth}px ${cell.borderColor} for sides: ${cell.borderSides}`);
+              
+              // Apply specific border side
+              if (cell.borderSides) {
+                applyCellBorderStyle(
+                  cell.borderSides, 
+                  cell.borderStyle, 
+                  cell.borderWidth, 
+                  cell.borderColor
+                );
               }
-            }
-            
-            // Apply the CSS
-            if (cellStyle) {
-              console.log(`Cell style for ${columnField}:`, cellStyle);
-              
-              // First approach: Add a custom cellRenderer function to apply styles
-              colDef.cellRenderer = (params) => {
-                // Get original value
-                const originalValue = params.value;
-                
-                // Create wrapper element with inline styles
-                const cellElement = document.createElement('div');
-                cellElement.className = 'styled-cell';
-                cellElement.innerHTML = originalValue !== undefined && originalValue !== null ? originalValue : '';
-                
-                // Apply inline styles
-                Object.assign(cellElement.style, {
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  ...(cell.fontFamily && { fontFamily: cell.fontFamily }),
-                  ...(cell.fontSize && { fontSize: cell.fontSize }),
-                  ...(cell.bold && { fontWeight: 'bold' }),
-                  ...(cell.italic && { fontStyle: 'italic' }),
-                  ...(cell.underline && { textDecoration: 'underline' }),
-                  ...(cell.textColor && { color: cell.textColor }),
-                  ...(cell.backgroundColor && { backgroundColor: cell.backgroundColor }),
-                  ...(cell.alignH && { justifyContent: cell.alignH === 'right' ? 'flex-end' : cell.alignH === 'center' ? 'center' : 'flex-start' })
-                });
-                
-                return cellElement;
-              };
-              
-              // Second approach: Create an ID-based stylesheet for extra coverage
-              let styleElement = document.getElementById(`cell-style-${columnField}`);
-              if (!styleElement) {
-                styleElement = document.createElement('style');
-                styleElement.id = `cell-style-${columnField}`;
-                document.head.appendChild(styleElement);
-              }
-              
-              // Use extremely specific selectors
-              const cssContent = `
-                /* AG Grid cell styles for column ${columnField} */
-                .ag-theme-quartz .ag-row .ag-cell[col-id="${columnField}"],
-                .ag-theme-quartz-dark .ag-row .ag-cell[col-id="${columnField}"],
-                .ag-theme-quartz [col-id="${columnField}"].ag-cell,
-                .ag-theme-quartz-dark [col-id="${columnField}"].ag-cell,
-                div.ag-theme-quartz .ag-row .ag-cell[col-id="${columnField}"],
-                div.ag-theme-quartz-dark .ag-row .ag-cell[col-id="${columnField}"] {
-                  ${cellStyle} !important;
-                }
-                
-                /* Target the cell directly */
-                .ag-theme-quartz [row-index][aria-colindex][col-id="${columnField}"],
-                .ag-theme-quartz-dark [row-index][aria-colindex][col-id="${columnField}"] {
-                  ${cellStyle} !important;
-                }`;
-              
-              styleElement.textContent = cssContent;
-              console.log(`Applied CSS to cell stylesheet: ${cssContent}`);
-              
-              // Third approach: Direct DOM manipulation with a mutation observer
-              // Create a mutation observer to watch for new cell elements
-              setTimeout(() => {
-                try {
-                  console.log(`Setting up mutation observer for column ${columnField} cell styling`);
-                  
-                  // First, try to apply styles to all existing cells
-                  const cellElements = document.querySelectorAll(`.ag-row .ag-cell[col-id="${columnField}"]`);
-                  console.log(`Found ${cellElements.length} cell elements for column ${columnField}`);
-                  
-                  cellElements.forEach(cellElement => {
-                    // Apply styles directly to the cell element
-                    if (cell.fontFamily) cellElement.style.fontFamily = cell.fontFamily;
-                    if (cell.fontSize) cellElement.style.fontSize = cell.fontSize;
-                    if (cell.bold) cellElement.style.fontWeight = 'bold';
-                    if (cell.italic) cellElement.style.fontStyle = 'italic';
-                    if (cell.underline) cellElement.style.textDecoration = 'underline';
-                    if (cell.textColor) cellElement.style.color = cell.textColor;
-                    if (cell.backgroundColor) cellElement.style.backgroundColor = cell.backgroundColor;
-                    if (cell.alignH) cellElement.style.textAlign = cell.alignH;
-                    
-                    // Mark as styled
-                    cellElement.setAttribute('data-styled', 'true');
-                    cellElement.setAttribute('data-style-version', Date.now().toString());
-                  });
-                  
-                  // Set up observer to catch new cells as they're rendered
-                  const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                      if (mutation.type === 'childList') {
-                        mutation.addedNodes.forEach((node) => {
-                          if (node.nodeType === 1) { // Element node
-                            // Check if it's a cell for our column
-                            const cellElements = (node as Element).querySelectorAll 
-                              ? (node as Element).querySelectorAll(`.ag-cell[col-id="${columnField}"]`)
-                              : [];
-                            
-                            // Apply styles to each matching cell
-                            cellElements.forEach(cellElement => {
-                              if (!cellElement.hasAttribute('data-styled')) {
-                                if (cell.fontFamily) cellElement.style.fontFamily = cell.fontFamily;
-                                if (cell.fontSize) cellElement.style.fontSize = cell.fontSize;
-                                if (cell.bold) cellElement.style.fontWeight = 'bold';
-                                if (cell.italic) cellElement.style.fontStyle = 'italic';
-                                if (cell.underline) cellElement.style.textDecoration = 'underline';
-                                if (cell.textColor) cellElement.style.color = cell.textColor;
-                                if (cell.backgroundColor) cellElement.style.backgroundColor = cell.backgroundColor;
-                                if (cell.alignH) cellElement.style.textAlign = cell.alignH;
-                                
-                                cellElement.setAttribute('data-styled', 'true');
-                                cellElement.setAttribute('data-style-version', Date.now().toString());
-                              }
-                            });
-                          }
-                        });
-                      }
-                    });
-                  });
-                  
-                  // Start observing the grid container
-                  const gridElement = document.querySelector('.ag-theme-quartz');
-                  if (gridElement) {
-                    observer.observe(gridElement, { childList: true, subtree: true });
-                    
-                    // Store observer in a global array for cleanup
-                    window['cellStyleObservers'] = window['cellStyleObservers'] || {};
-                    
-                    // Clean up any existing observer for this column
-                    if (window['cellStyleObservers'][columnField]) {
-                      window['cellStyleObservers'][columnField].disconnect();
-                    }
-                    
-                    // Store the new observer
-                    window['cellStyleObservers'][columnField] = observer;
-                  }
-                } catch (error) {
-                  console.error('Error setting up cell style mutation observer:', error);
-                }
-              }, 200);
             }
           } else {
-            // Remove any existing cell styles
+            // Remove all cell styles
             console.log(`Removing cell styles for column ${columnField}`);
-            
-            // Remove custom renderer if it exists
-            if (colDef.cellRenderer) {
-              colDef.cellRenderer = undefined;
-            }
-            
-            // Remove stylesheet
-            const styleElement = document.getElementById(`cell-style-${columnField}`);
-            if (styleElement) styleElement.remove();
-            
-            // Disconnect observer if it exists
-            if (window['cellStyleObservers'] && window['cellStyleObservers'][columnField]) {
-              window['cellStyleObservers'][columnField].disconnect();
-              delete window['cellStyleObservers'][columnField];
-            }
-            
-            // Remove inline styles with a delay
-            setTimeout(() => {
-              try {
-                const cellElements = document.querySelectorAll(`.ag-row .ag-cell[col-id="${columnField}"]`);
-                cellElements.forEach((cell) => {
-                  cell.removeAttribute('style');
-                  cell.removeAttribute('data-styled');
-                });
-              } catch (error) {
-                console.error('Error removing cell styles:', error);
-              }
-            }, 150);
+            resetAllCellStyles();
           }
           
-          // Refresh the grid with a more comprehensive approach
+          // Execute a comprehensive refresh sequence
           console.log(`Refreshing grid after applying styles to column ${columnField}`);
           
-          // First refresh header
-          if (typeof gridApi.refreshHeader === 'function') {
-            console.log('Refreshing grid headers');
-            gridApi.refreshHeader();
-          }
-          
-          // Then refresh cells
-          if (typeof gridApi.refreshCells === 'function') {
-            console.log(`Refreshing cells for column ${columnField}`);
-            gridApi.refreshCells({ 
-              force: true, 
-              columns: [columnField] 
-            });
-          }
-          
-          // For safety, trigger a full grid refresh with a small delay
-          setTimeout(() => {
-            try {
-              if (gridApi && typeof gridApi.redrawRows === 'function') {
-                console.log('Performing complete grid redraw to ensure styles are applied');
-                gridApi.redrawRows();
-              }
-            } catch (error) {
-              console.warn('Error during grid redraw:', error);
+          const refreshGrid = () => {
+            console.log(`REFRESHING GRID for column ${columnField} changes`);
+            
+            // First refresh header
+            if (typeof operationalGridApi.refreshHeader === 'function') {
+              operationalGridApi.refreshHeader();
+              console.log('Header refreshed');
             }
-          }, 50);
+            
+            // Then refresh cells
+            if (typeof operationalGridApi.refreshCells === 'function') {
+              operationalGridApi.refreshCells({ 
+                force: true, 
+                columns: [columnField] 
+              });
+              console.log('Cells refreshed (specific column)');
+            }
+            
+            // Then try to redraw rows
+            if (typeof operationalGridApi.redrawRows === 'function') {
+              operationalGridApi.redrawRows();
+              console.log('All rows redrawn');
+            }
+            
+            // Finally, try a complete view refresh if available
+            if (typeof operationalGridApi.refreshView === 'function') {
+              operationalGridApi.refreshView();
+              console.log('Complete view refresh');
+            }
+          };
+            
+          // Execute immediate refresh
+          refreshGrid();
+          
+          // Schedule a second refresh after a short delay
+          setTimeout(refreshGrid, 100);
           
           console.log(`Successfully applied settings to column ${columnField}`);
           return true;
