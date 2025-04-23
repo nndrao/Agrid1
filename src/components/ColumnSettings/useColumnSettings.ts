@@ -367,340 +367,17 @@ export const useColumnSettings = (initialColumn: string) => {
     }
   }, [getInitialState]);
 
-  // Apply column settings to the grid - completely rewritten for reliability
+  // Delegate to the store's applyColumnSettings function
   const applySettingsToGrid = useCallback((columnField: string) => {
-    console.log('Applying settings to grid for column:', columnField);
+    // Use the store's implementation instead of duplicating code
+    const { applyColumnSettings } = useGridStore.getState();
     
-    // Early returns for invalid input
-    if (!gridApi) {
-      console.error('Grid API not available for applying settings');
-      return false;
-    }
+    // Save the column settings first
+    saveProfile(`${columnField}_settings`);
     
-    if (!columnField) {
-      console.error('No column field provided');
-      return false;
-    }
-
-    try {
-      // Log useful debugging info
-      console.log('Current state being applied:', {
-        general: state.general.headerName, 
-        header: state.header.applyStyles,
-        cell: state.cell.applyStyles
-      });
-      
-      // Create stable copies of all settings
-      const generalSettings = {...state.general};
-      const headerSettings = {...state.header};
-      const cellSettings = {...state.cell};
-      
-      // Get the column by ID - try multiple methods
-      let column = null;
-      let colDef = null;
-      
-      // Method 1: Direct getColumn
-      if (gridApi.getColumn && typeof gridApi.getColumn === 'function') {
-        column = gridApi.getColumn(columnField);
-      }
-      
-      // Method 2: Search in all columns
-      if (!column && gridApi.getColumns && typeof gridApi.getColumns === 'function') {
-        const allColumns = gridApi.getColumns();
-        column = allColumns.find(c => c.getColId() === columnField);
-      }
-      
-      // If we found a column, get its definition
-      if (column) {
-        console.log('Column found:', columnField);
-        if (column.getColDef && typeof column.getColDef === 'function') {
-          colDef = column.getColDef();
-        }
-      } else {
-        console.error('Column not found in grid:', columnField);
-        return false;
-      }
-      
-      // Ensure we have a valid column definition
-      if (!colDef) {
-        console.error('Failed to get column definition');
-        return false;
-      }
-      
-      // Apply general settings
-      console.log('Applying general settings to column');
-      colDef.headerName = generalSettings.headerName;
-      colDef.width = parseInt(generalSettings.width, 10) || undefined;
-      colDef.sortable = generalSettings.sortable;
-      colDef.resizable = generalSettings.resizable;
-      colDef.filter = generalSettings.filter === 'Enabled' ? true : false;
-      colDef.editable = generalSettings.editable;
-
-      // Handle column type
-      if (generalSettings.columnType === 'Number') {
-        colDef.type = 'customNumeric';
-        colDef.filter = 'agNumberColumnFilter';
-      } else if (generalSettings.columnType === 'Date') {
-        colDef.type = 'customDate';
-        colDef.filter = 'agDateColumnFilter';
-      } else if (generalSettings.columnType === 'String') {
-        colDef.type = undefined;
-        colDef.filter = 'agTextColumnFilter';
-      }
-
-      // Update filter type if filter is enabled
-      if (generalSettings.filter === 'Enabled' && generalSettings.filterType !== 'Auto') {
-        if (generalSettings.filterType === 'Text') colDef.filter = 'agTextColumnFilter';
-        if (generalSettings.filterType === 'Number') colDef.filter = 'agNumberColumnFilter';
-        if (generalSettings.filterType === 'Date') colDef.filter = 'agDateColumnFilter';
-      }
-
-      // Apply header styles
-      if (headerSettings.applyStyles) {
-        console.log('Applying header styles');
-        
-        // Set header class
-        colDef.headerClass = `custom-header-${columnField}`;
-
-        // Create CSS for header
-        let headerStyle = '';
-        if (headerSettings.fontFamily) headerStyle += `font-family: ${headerSettings.fontFamily}; `;
-        if (headerSettings.fontSize) headerStyle += `font-size: ${headerSettings.fontSize}; `;
-        if (headerSettings.bold) headerStyle += 'font-weight: bold; ';
-        if (headerSettings.italic) headerStyle += 'font-style: italic; ';
-        if (headerSettings.underline) headerStyle += 'text-decoration: underline; ';
-        if (headerSettings.textColor) headerStyle += `color: ${headerSettings.textColor}; `;
-        if (headerSettings.backgroundColor) headerStyle += `background-color: ${headerSettings.backgroundColor}; `;
-        if (headerSettings.alignH) headerStyle += `text-align: ${headerSettings.alignH}; `;
-
-        // Add border styles if specified
-        if (headerSettings.borderStyle && headerSettings.borderWidth && headerSettings.borderColor) {
-          const borderStyle = `${headerSettings.borderWidth}px ${headerSettings.borderStyle.toLowerCase()} ${headerSettings.borderColor}`;
-
-          if (headerSettings.borderSides === 'All') {
-            headerStyle += `border: ${borderStyle}; `;
-          } else if (headerSettings.borderSides === 'Top') {
-            headerStyle += `border-top: ${borderStyle}; `;
-          } else if (headerSettings.borderSides === 'Right') {
-            headerStyle += `border-right: ${borderStyle}; `;
-          } else if (headerSettings.borderSides === 'Bottom') {
-            headerStyle += `border-bottom: ${borderStyle}; `;
-          } else if (headerSettings.borderSides === 'Left') {
-            headerStyle += `border-left: ${borderStyle}; `;
-          }
-        }
-
-        // Apply the CSS
-        if (headerStyle) {
-          let styleElement = document.getElementById(`header-style-${columnField}`);
-          if (!styleElement) {
-            styleElement = document.createElement('style');
-            styleElement.id = `header-style-${columnField}`;
-            document.head.appendChild(styleElement);
-          }
-          styleElement.textContent = `.ag-header-cell.custom-header-${columnField}, .ag-header-cell[col-id="${columnField}"] { ${headerStyle} }`;
-        }
-      } else {
-        // Remove styles if disabled
-        const styleElement = document.getElementById(`header-style-${columnField}`);
-        if (styleElement) styleElement.remove();
-        
-        // Clear the header class
-        if (colDef.headerClass) colDef.headerClass = undefined;
-      }
-
-      // Apply cell styles
-      if (cellSettings.applyStyles) {
-        console.log('Applying cell styles');
-        
-        // Set cell class
-        colDef.cellClass = `custom-cell-${columnField}`;
-
-        // Create CSS for cells
-        let cellStyle = '';
-        if (cellSettings.fontFamily) cellStyle += `font-family: ${cellSettings.fontFamily}; `;
-        if (cellSettings.fontSize) cellStyle += `font-size: ${cellSettings.fontSize}; `;
-        if (cellSettings.bold) cellStyle += 'font-weight: bold; ';
-        if (cellSettings.italic) cellStyle += 'font-style: italic; ';
-        if (cellSettings.underline) cellStyle += 'text-decoration: underline; ';
-        if (cellSettings.textColor) cellStyle += `color: ${cellSettings.textColor}; `;
-        if (cellSettings.backgroundColor) cellStyle += `background-color: ${cellSettings.backgroundColor}; `;
-        if (cellSettings.alignH) cellStyle += `text-align: ${cellSettings.alignH}; `;
-
-        // Add border styles if specified
-        if (cellSettings.borderStyle && cellSettings.borderWidth && cellSettings.borderColor) {
-          const borderStyle = `${cellSettings.borderWidth}px ${cellSettings.borderStyle.toLowerCase()} ${cellSettings.borderColor}`;
-
-          if (cellSettings.borderSides === 'All') {
-            cellStyle += `border: ${borderStyle}; `;
-          } else if (cellSettings.borderSides === 'Top') {
-            cellStyle += `border-top: ${borderStyle}; `;
-          } else if (cellSettings.borderSides === 'Right') {
-            cellStyle += `border-right: ${borderStyle}; `;
-          } else if (cellSettings.borderSides === 'Bottom') {
-            cellStyle += `border-bottom: ${borderStyle}; `;
-          } else if (cellSettings.borderSides === 'Left') {
-            cellStyle += `border-left: ${borderStyle}; `;
-          }
-        }
-
-        // Apply the CSS
-        if (cellStyle) {
-          let styleElement = document.getElementById(`cell-style-${columnField}`);
-          if (!styleElement) {
-            styleElement = document.createElement('style');
-            styleElement.id = `cell-style-${columnField}`;
-            document.head.appendChild(styleElement);
-          }
-          styleElement.textContent = `.ag-cell.custom-cell-${columnField}, .ag-cell[col-id="${columnField}"] { ${cellStyle} }`;
-        }
-      } else {
-        // Remove styles if disabled
-        const styleElement = document.getElementById(`cell-style-${columnField}`);
-        if (styleElement) styleElement.remove();
-        
-        // Clear the cell class
-        if (colDef.cellClass) colDef.cellClass = undefined;
-      }
-
-      // Apply column visibility
-      if (typeof column.setVisible === 'function') {
-        console.log(`Setting column visibility: ${!generalSettings.hidden}`);
-        column.setVisible(!generalSettings.hidden);
-      }
-
-      // Apply column pinned state
-      if (typeof column.setPinned === 'function') {
-        let pinnedState = null;
-        if (generalSettings.pinnedPosition === 'Left') pinnedState = 'left';
-        if (generalSettings.pinnedPosition === 'Right') pinnedState = 'right';
-        console.log(`Setting column pinned state: ${pinnedState}`);
-        column.setPinned(pinnedState);
-      }
-      
-      // Refresh the grid
-      console.log('Refreshing grid after applying settings');
-      
-      // Refresh cells
-      if (typeof gridApi.refreshCells === 'function') {
-        gridApi.refreshCells({ 
-          force: true, 
-          columns: [columnField] 
-        });
-      }
-      
-      // Refresh header
-      if (typeof gridApi.refreshHeader === 'function') {
-        gridApi.refreshHeader();
-      }
-      
-      // Redraw rows if needed
-      if (typeof gridApi.redrawRows === 'function') {
-        gridApi.redrawRows();
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error applying column settings:', error);
-
-      // Final fallback: try using the columnApi directly if available
-      try {
-        if (gridApi.columnApi) {
-          console.log('Attempting to use columnApi directly');
-          const generalSettings = {...state.general};
-
-          // Try to update the column using columnApi methods
-          if (typeof gridApi.columnApi.setColumnWidth === 'function') {
-            gridApi.columnApi.setColumnWidth(columnField, parseInt(generalSettings.width, 10) || 120);
-          }
-
-          if (typeof gridApi.columnApi.setColumnVisible === 'function') {
-            gridApi.columnApi.setColumnVisible(columnField, !generalSettings.hidden);
-          }
-
-          if (typeof gridApi.columnApi.setColumnPinned === 'function') {
-            let pinnedState = null;
-            if (generalSettings.pinnedPosition === 'Left') pinnedState = 'left';
-            if (generalSettings.pinnedPosition === 'Right') pinnedState = 'right';
-            gridApi.columnApi.setColumnPinned(columnField, pinnedState);
-          }
-
-          // Apply header styles only if enabled
-          if (state.header.applyStyles) {
-            // Apply header styles using CSS
-            let headerStyle = '';
-            if (state.header.fontFamily) headerStyle += `font-family: ${state.header.fontFamily}; `;
-            if (state.header.fontSize) headerStyle += `font-size: ${state.header.fontSize}; `;
-            if (state.header.bold) headerStyle += 'font-weight: bold; ';
-            if (state.header.italic) headerStyle += 'font-style: italic; ';
-            if (state.header.underline) headerStyle += 'text-decoration: underline; ';
-            if (state.header.textColor) headerStyle += `color: ${state.header.textColor}; `;
-            if (state.header.backgroundColor) headerStyle += `background-color: ${state.header.backgroundColor}; `;
-            if (state.header.alignH) headerStyle += `text-align: ${state.header.alignH}; `;
-
-            // Apply the CSS to the document
-            if (headerStyle) {
-              let styleElement = document.getElementById(`header-style-${columnField}`);
-              if (!styleElement) {
-                styleElement = document.createElement('style');
-                styleElement.id = `header-style-${columnField}`;
-                document.head.appendChild(styleElement);
-              }
-              styleElement.textContent = `.ag-header-cell[col-id="${columnField}"] { ${headerStyle} }`;
-            }
-          } else {
-            // Remove any existing styles if not enabled
-            const styleElement = document.getElementById(`header-style-${columnField}`);
-            if (styleElement) {
-              styleElement.remove();
-            }
-          }
-
-          // Apply cell styles only if enabled
-          if (state.cell.applyStyles) {
-            // Apply cell styles using CSS
-            let cellStyle = '';
-            if (state.cell.fontFamily) cellStyle += `font-family: ${state.cell.fontFamily}; `;
-            if (state.cell.fontSize) cellStyle += `font-size: ${state.cell.fontSize}; `;
-            if (state.cell.bold) cellStyle += 'font-weight: bold; ';
-            if (state.cell.italic) cellStyle += 'font-style: italic; ';
-            if (state.cell.underline) cellStyle += 'text-decoration: underline; ';
-            if (state.cell.textColor) cellStyle += `color: ${state.cell.textColor}; `;
-            if (state.cell.backgroundColor) cellStyle += `background-color: ${state.cell.backgroundColor}; `;
-            if (state.cell.alignH) cellStyle += `text-align: ${state.cell.alignH}; `;
-
-            // Apply the CSS to the document
-            if (cellStyle) {
-              let styleElement = document.getElementById(`cell-style-${columnField}`);
-              if (!styleElement) {
-                styleElement = document.createElement('style');
-                styleElement.id = `cell-style-${columnField}`;
-                document.head.appendChild(styleElement);
-              }
-              styleElement.textContent = `.ag-cell[col-id="${columnField}"] { ${cellStyle} }`;
-            }
-          } else {
-            // Remove any existing styles if not enabled
-            const styleElement = document.getElementById(`cell-style-${columnField}`);
-            if (styleElement) {
-              styleElement.remove();
-            }
-          }
-
-          // Refresh the grid
-          if (typeof gridApi.refreshHeader === 'function') {
-            gridApi.refreshHeader();
-          }
-
-          return true;
-        }
-      } catch (fallbackError) {
-        console.error('Error using columnApi fallback:', fallbackError);
-      }
-
-      return false;
-    }
-  }, [gridApi, state]);
+    // Then apply them
+    return applyColumnSettings(columnField);
+  }, []);
 
   // Save current settings to a profile
   const saveProfile = useCallback((profileName: string) => {
@@ -723,6 +400,12 @@ export const useColumnSettings = (initialColumn: string) => {
 
       // Save back to localStorage
       localStorage.setItem('columnSettingsProfiles', JSON.stringify(profiles));
+      
+      // Also save to store
+      if (profileName.endsWith('_settings')) {
+        const columnField = profileName.replace('_settings', '');
+        useGridStore.getState().saveColumnSettings(columnField, stateCopy);
+      }
 
       return true;
     } catch (error) {
@@ -793,6 +476,12 @@ export const useColumnSettings = (initialColumn: string) => {
 
       // Save back to localStorage
       localStorage.setItem('columnSettingsProfiles', JSON.stringify(profiles));
+
+      // Also delete from store if applicable
+      if (profileName.endsWith('_settings')) {
+        const columnField = profileName.replace('_settings', '');
+        useGridStore.getState().deleteColumnSettingsProfile(profileName);
+      }
 
       return true;
     } catch (error) {

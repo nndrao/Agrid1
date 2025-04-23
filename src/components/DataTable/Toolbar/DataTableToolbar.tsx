@@ -99,19 +99,26 @@ export function DataTableToolbar() {
     importProfile
   } = useGridStore();
 
-  // Initialize column list when the grid API is available
+  // Initialize column list when the grid API is available - no setTimeout
   useEffect(() => {
     if (gridApi && typeof gridApi.getAllDisplayedColumns === 'function') {
       try {
-        // Delay slightly to ensure grid is fully initialized
-        const timeoutId = setTimeout(() => {
-          if (!gridApi || !gridApi.getAllDisplayedColumns) return;
+        // Add safety check for API
+        if (!gridApi.getAllDisplayedColumns) {
+          console.warn('getAllDisplayedColumns method not available on gridApi');
+          return;
+        }
+        
+        // Get all columns from grid API directly
+        const columns = gridApi.getAllDisplayedColumns();
+        if (columns && columns.length > 0) {
+          // Extract column fields
+          const fields = columns.map((col: Column) => col.getColId());
           
-          // Get all columns from grid API
-          const columns = gridApi.getAllDisplayedColumns();
-          if (columns && columns.length > 0) {
-            // Extract column fields
-            const fields = columns.map((col: Column) => col.getColId());
+          // Only update if columns have changed
+          if (fields.length !== columnList.length || 
+              !fields.every((field, i) => columnList[i] === field)) {
+            console.log('Updating column list - found', fields.length, 'columns');
             setColumnList(fields);
             
             // Set first column as selected if we don't have one already
@@ -119,15 +126,15 @@ export function DataTableToolbar() {
               setSelectedColumn(fields[0]);
             }
           }
-        }, 300);
-        
-        return () => clearTimeout(timeoutId);
+        } else {
+          console.log('No columns returned from getAllDisplayedColumns');
+        }
       } catch (error) {
         console.error('Error getting columns from grid API:', error);
       }
     }
   // Only depend on gridApi changes to prevent unnecessary re-renders
-  }, [gridApi, selectedColumn]);
+  }, [gridApi, selectedColumn, columnList]);
 
   // Current active profile
   const activeProfile = getActiveProfile();

@@ -39,12 +39,20 @@ export const ExpressionEditor = forwardRef<HTMLTextAreaElement, ExpressionEditor
       const newValue = value.substring(0, start) + '  ' + value.substring(end);
       onChange(newValue);
       
-      // Move cursor after the inserted tab
-      setTimeout(() => {
-        if (localRef.current) {
-          localRef.current.selectionStart = localRef.current.selectionEnd = start + 2;
+      // Set cursor position directly - no need for setTimeout
+      // React will handle this during the next render cycle
+      if (localRef.current) {
+        try {
+          requestAnimationFrame(() => {
+            if (localRef.current) {
+              localRef.current.selectionStart = localRef.current.selectionEnd = start + 2;
+              localRef.current.focus();
+            }
+          });
+        } catch (error) {
+          console.warn('Error setting cursor position:', error);
         }
-      }, 0);
+      }
     }
   };
 

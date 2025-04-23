@@ -4,8 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { DataTable } from "@/components/DataTable/data-table";
 import { Toaster } from "@/components/ui/toaster";
-import { ColumnSettingsTest } from "@/components/ColumnSettings/ColumnSettingsTest";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 // Generate realistic fixed income position data
 function generateFixedIncomeData(rowCount: number) {
@@ -118,8 +117,6 @@ function generateFixedIncomeData(rowCount: number) {
 
 function App() {
   const data = useMemo(() => generateFixedIncomeData(1000), []);
-
-  const [showTestPanel, setShowTestPanel] = useState(true);
   
   return (
     <ThemeProvider
@@ -132,23 +129,6 @@ function App() {
         <div className="flex h-screen flex-col overflow-hidden">
           <Header />
           <main className="flex-1 container mx-auto p-5">
-            {/* Test Panel Toggle */}
-            <div className="mb-4">
-              <button 
-                onClick={() => setShowTestPanel(!showTestPanel)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                {showTestPanel ? 'Hide Test Panel' : 'Show Test Panel'}
-              </button>
-            </div>
-            
-            {/* Floating Test Panel */}
-            {showTestPanel && (
-              <div className="absolute top-20 right-5 z-50">
-                <ColumnSettingsTest />
-              </div>
-            )}
-            
             <DataTable data={data} />
           </main>
           <Footer />

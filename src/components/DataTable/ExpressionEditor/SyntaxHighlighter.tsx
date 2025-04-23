@@ -89,8 +89,8 @@ export const SyntaxHighlighter: React.FC<SyntaxHighlighterProps> = ({
     onChange(newValue);
     setShowAutoComplete(false);
 
-    // Move cursor after inserted text
-    setTimeout(() => {
+    // Move cursor after inserted text - using requestAnimationFrame instead of setTimeout
+    requestAnimationFrame(() => {
       if (textareaRef.current) {
         const newCursorPosition = start - word.length + suggestion.value.length;
         textareaRef.current.selectionStart = newCursorPosition;
