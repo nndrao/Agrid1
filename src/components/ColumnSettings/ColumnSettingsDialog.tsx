@@ -6,23 +6,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+// Tabs components are used in TabsWrapper
 import { TabsWrapper } from './TabsWrapper';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Check, ChevronsUpDown, Save, Trash2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Label } from '@/components/ui/label';
-
 import { ColumnList } from './ColumnList';
-import { GeneralTab } from './tabs/GeneralTab';
-import { HeaderTab } from './tabs/HeaderTab';
-import { CellTab } from './tabs/CellTab';
-import { FilterTab } from './tabs/FilterTab';
-import { FormattersTab } from './tabs/FormattersTab';
-import { EditorsTab } from './tabs/EditorsTab';
 import { useColumnSettings } from './useColumnSettings';
+import { useGridStore } from '@/store/gridStore';
 
 interface ColumnSettingsDialogProps {
   open: boolean;
@@ -44,7 +37,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
 }) => {
   const { toast } = useToast();
   const [isApplying, setIsApplying] = useState(false);
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab] = useState("general");
 
   // Profile management
   const [profilesOpen, setProfilesOpen] = useState(false);
@@ -80,7 +73,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
         console.log(`Column ${selectedColumn} already selected, skipping reset`);
         return;
       }
-      
+
       // Check if there's a saved profile for this column
       const savedProfilesJson = localStorage.getItem('columnSettingsProfiles') || '{}';
       const savedProfiles = JSON.parse(savedProfilesJson);
@@ -142,8 +135,34 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
       // Store the header name for later use in toast
       const headerName = state.general.headerName;
 
+      // Get the grid store state to access the grid API
+      const gridStore = useGridStore();
+      const { gridApi } = gridStore;
+
+      // Capture the current column width from the grid before applying settings
+      if (gridApi && typeof gridApi.getColumn === 'function' && selectedColumn) {
+        try {
+          const column = gridApi.getColumn(selectedColumn);
+          if (column) {
+            // Get the current width from the column state
+            const columnState = gridApi.getColumnState().find((col: any) => col.colId === selectedColumn);
+            if (columnState && columnState.width) {
+              // Update the width in the state before applying settings
+              updateGeneral({ width: columnState.width.toString() });
+
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`Captured current width for column ${selectedColumn}: ${columnState.width}px`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error capturing column width:', error);
+        }
+      }
+
       // Apply the changes to the grid
-      const success = applySettingsToGrid(selectedColumn);
+      // When applying changes from the dialog, we want to preserve the current width
+      const success = applySettingsToGrid(selectedColumn, true);
 
       if (success) {
         // Save the settings to a profile with the column name
@@ -152,6 +171,12 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
 
         // Increment version to refresh the profiles list
         setProfilesVersion(prev => prev + 1);
+
+        // RULE 1: Don't update the grid after saving settings
+        // The grid already has these settings since we just applied them
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Settings applied and saved successfully - no need to apply settings back to grid');
+        }
 
         toast({
           title: "Column settings updated",
@@ -176,7 +201,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
     } finally {
       setIsApplying(false);
     }
-  }, [applySettingsToGrid, onOpenChange, selectedColumn, state.general.headerName, toast, setIsApplying, saveProfile, setProfilesVersion]);
+  }, [applySettingsToGrid, onOpenChange, selectedColumn, state.general.headerName, toast, setIsApplying, saveProfile, setProfilesVersion, updateGeneral]);
 
   // Handle reset
   const handleReset = useCallback(() => {
@@ -213,6 +238,32 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
     setIsSavingProfile(true);
 
     try {
+      // Get the grid store state to access the grid API
+      const gridStore = useGridStore();
+      const { gridApi } = gridStore;
+
+      // Capture the current column width from the grid before saving
+      if (gridApi && typeof gridApi.getColumn === 'function' && selectedColumn) {
+        try {
+          const column = gridApi.getColumn(selectedColumn);
+          if (column) {
+            // Get the current width from the column state
+            const columnState = gridApi.getColumnState().find((col: any) => col.colId === selectedColumn);
+            if (columnState && columnState.width) {
+              // Update the width in the state before saving
+              updateGeneral({ width: columnState.width.toString() });
+
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`Captured current width for column ${selectedColumn}: ${columnState.width}px`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error capturing column width:', error);
+        }
+      }
+
+      // Save the profile with the updated width
       const success = saveProfile(newProfileName);
 
       if (success) {
@@ -225,6 +276,10 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
         setNewProfileName('');
         // Increment version to refresh the profiles list
         setProfilesVersion(prev => prev + 1);
+
+        // No need to apply settings to the grid after saving
+        // The grid already has these settings since we just captured them
+        console.log('Profile saved successfully - no need to apply settings back to grid');
       } else {
         toast({
           title: "Error saving profile",
@@ -242,7 +297,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
     } finally {
       setIsSavingProfile(false);
     }
-  }, [newProfileName, saveProfile, toast, setProfilesVersion]);
+  }, [newProfileName, saveProfile, toast, setProfilesVersion, selectedColumn, updateGeneral]);
 
   // Handle load from profile
   const handleLoadFromProfile = useCallback((profileName: string) => {
@@ -250,11 +305,13 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
       const success = loadProfile(profileName);
 
       if (success) {
-        // Apply the settings to the grid immediately
+        // RULE 3: When switching profiles, apply the column settings from the new profile
         setTimeout(() => {
-          const applySuccess = applySettingsToGrid(selectedColumn);
+          // Apply settings with preserveCurrentWidth=false to use the saved width from the profile
+          // This ensures consistent behavior when switching profiles
+          const applySuccess = applySettingsToGrid(selectedColumn, false);
           if (applySuccess) {
-            console.log(`Applied settings from profile "${profileName}" to column ${selectedColumn}`);
+            console.log(`Applied settings from profile "${profileName}" to column ${selectedColumn} using saved width`);
           }
         }, 100); // Small delay to ensure state is updated
 

@@ -79,6 +79,19 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       return;
     }
 
+    // Check if settings were just saved - if so, don't apply them back to the grid
+    const { justSaved } = useGridStore.getState();
+
+    if (justSaved) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Skipping grid refresh - settings were just saved');
+      }
+
+      // Reset the justSaved flag
+      useGridStore.setState({ justSaved: false });
+      return;
+    }
+
     if (process.env.NODE_ENV === 'development') {
       console.log('Applying settings and profiles in batch');
     }

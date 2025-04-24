@@ -66,14 +66,57 @@ export const useApplyColumnProfiles = (gridApi: any) => {
 
         // Use requestAnimationFrame to batch DOM updates
         requestAnimationFrame(() => {
-          // Apply settings to each column
+          // RULE 2 & 3: When applying settings from a profile, always use the saved width
+          // This ensures consistent behavior when refreshing or switching profiles
           columnsToStyle.forEach(columnField => {
             try {
-              gridStore.applyColumnSettings(columnField);
+              // Always use preserveCurrentWidth=false to use the saved width from the profile
+              // This ensures consistent behavior when refreshing or switching profiles
+              gridStore.applyColumnSettings(columnField, false);
+
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`Applied settings for column ${columnField} from profile`);
+              }
             } catch (error) {
               console.error(`Error applying settings for column ${columnField}:`, error);
             }
           });
+
+          // Apply column widths explicitly to ensure they're applied correctly
+          if (gridApi && typeof gridApi.applyColumnState === 'function') {
+            try {
+              // Get column widths from profiles
+              const widthColumnsState = columnsToStyle
+                .map(columnField => {
+                  const columnSettings = gridStore.getColumnSettings(columnField);
+                  if (!columnSettings?.general?.width) return null;
+
+                  const width = parseInt(columnSettings.general.width, 10);
+                  if (isNaN(width) || width <= 0) return null;
+
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`Explicitly applying saved width for column ${columnField}: ${width}px`);
+                  }
+
+                  return {
+                    colId: columnField,
+                    width: width
+                  };
+                })
+                .filter(state => state !== null);
+
+              if (widthColumnsState.length > 0) {
+                // Apply column widths with higher priority
+                gridApi.applyColumnState({
+                  state: widthColumnsState,
+                  applyOrder: true, // Ensure the order is respected
+                  defaultState: { width: null } // Clear any default width
+                });
+              }
+            } catch (error) {
+              console.error('Error applying column width states:', error);
+            }
+          }
 
           // Perform a single grid refresh after applying all settings
           if (process.env.NODE_ENV === 'development') {

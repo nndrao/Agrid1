@@ -118,6 +118,7 @@ interface GridStore {
   // Current Settings (from active profile or modified)
   settings: GridSettings;
   isDirty: boolean;
+  justSaved: boolean; // Flag to indicate if settings were just saved
 
   // Grid API reference for operations
   gridApi: any | null;
@@ -196,6 +197,7 @@ export const useGridStore = create<GridStore>()(
       },
 
       isDirty: false,
+      justSaved: false, // Flag to indicate if settings were just saved
       gridApi: null,
 
       // Initialize store with default values
@@ -211,6 +213,34 @@ export const useGridStore = create<GridStore>()(
 
         const activeProfile = profiles?.find(p => p.id === activeProfileId) || defaultProfile;
 
+        // RULE 2: When the app is refreshed, load the column settings from the active profile
+        // Make a deep copy of column settings profiles to avoid reference issues
+        let columnSettingsProfiles = {};
+        if (activeProfile.columnSettingsProfiles) {
+          try {
+            // Deep clone the column settings profiles
+            columnSettingsProfiles = JSON.parse(JSON.stringify(activeProfile.columnSettingsProfiles));
+
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Loaded column settings profiles from active profile:', Object.keys(columnSettingsProfiles));
+
+              // Log column widths for debugging
+              Object.keys(columnSettingsProfiles).forEach(profileName => {
+                if (profileName.endsWith('_settings')) {
+                  const columnField = profileName.replace('_settings', '');
+                  const width = columnSettingsProfiles[profileName]?.general?.width;
+                  if (width) {
+                    console.log(`Column ${columnField} has saved width: ${width}px`);
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Error cloning column settings profiles:', error);
+            columnSettingsProfiles = {};
+          }
+        }
+
         // Reset settings from active profile with fallbacks to defaults
         set({
           activeProfileId: activeProfile.id, // Ensure we have a valid profile ID
@@ -224,11 +254,15 @@ export const useGridStore = create<GridStore>()(
             rowGroupState: activeProfile.rowGroupState || null,
             pivotState: activeProfile.pivotState || null,
             chartState: activeProfile.chartState || null,
-            columnSettingsProfiles: activeProfile.columnSettingsProfiles || {},
+            columnSettingsProfiles: columnSettingsProfiles,
             themeMode: activeProfile.themeMode || 'system'
           },
           isDirty: false
         });
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Store initialized with active profile:', activeProfile.name);
+        }
       },
 
       // Set grid API with improved persistence
@@ -639,13 +673,18 @@ export const useGridStore = create<GridStore>()(
                 }
               }
 
-              // Apply column profiles if available - synchronously
+              // RULE 3: When switching profiles, apply the column settings from the new profile
               if (newSettings.columnSettingsProfiles &&
                   Object.keys(newSettings.columnSettingsProfiles).length > 0) {
                 try {
                   // Apply all column profiles in a single batch
+                  // This ensures that when switching profiles, the column settings are applied
                   get().applyAllColumnProfiles();
                   needsGridRefresh = true;
+
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('Applied column profiles from newly selected profile');
+                  }
                 } catch (e) {
                   console.warn('Error applying column profiles:', e);
                 }
@@ -979,7 +1018,39 @@ export const useGridStore = create<GridStore>()(
         let pivotState = null;
         let chartState = null;
         // Keep column settings profiles from current settings
-        const columnSettingsProfiles = settings.columnSettingsProfiles || {};
+        const columnSettingsProfiles = { ...settings.columnSettingsProfiles } || {};
+
+        // Update column settings profiles with current column widths
+        if (gridApi && typeof gridApi.getColumnState === 'function') {
+          try {
+            const columnState = gridApi.getColumnState();
+
+            // For each column with settings, update the width
+            Object.keys(columnSettingsProfiles).forEach(profileName => {
+              if (profileName.endsWith('_settings')) {
+                const columnField = profileName.replace('_settings', '');
+                const columnInfo = columnState.find((col: any) => col.colId === columnField);
+
+                if (columnInfo && columnInfo.width && columnSettingsProfiles[profileName]) {
+                  // Update the width in the column settings
+                  columnSettingsProfiles[profileName] = {
+                    ...columnSettingsProfiles[profileName],
+                    general: {
+                      ...columnSettingsProfiles[profileName].general,
+                      width: columnInfo.width.toString()
+                    }
+                  };
+
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`Updated width in profile for column ${columnField}: ${columnInfo.width}px`);
+                  }
+                }
+              }
+            });
+          } catch (error) {
+            console.error('Error updating column widths in profiles:', error);
+          }
+        }
 
         try {
           // Use the current column state directly from the grid API
@@ -1054,23 +1125,12 @@ export const useGridStore = create<GridStore>()(
             };
           });
 
-          // We need to preserve the current column state to prevent auto-sizing
-          // Apply only the column state back to the grid without triggering a full refresh
-          if (columnsState && gridApi) {
-            try {
-              console.log('Preserving column widths after profile save');
-              // Use a small timeout to ensure the store update is complete
-              setTimeout(() => {
-                // Only apply column state to preserve widths, without triggering other refreshes
-                gridApi.applyColumnState({
-                  state: columnsState,
-                  applyOrder: true
-                });
-              }, 0);
-            } catch (error) {
-              console.warn('Failed to preserve column widths after profile save:', error);
-            }
-          }
+          // RULE 1: When saving settings, don't update the grid after the save
+          // The grid already has these settings since we just captured them
+          console.log('Profile saved successfully - no need to apply settings back to grid');
+
+          // Set the justSaved flag to prevent the grid from refreshing
+          set({ justSaved: true });
         } else {
           console.log('Profile not updated: either not found or is default profile');
         }
@@ -1200,10 +1260,30 @@ export const useGridStore = create<GridStore>()(
                   return col;
                 });
 
+                // Get current column widths to preserve them
+                const currentWidths = {};
+                try {
+                  const columnState = gridApi.getColumnState();
+                  columnState.forEach(col => {
+                    if (col.colId && col.width) {
+                      currentWidths[col.colId] = col.width;
+                    }
+                  });
+                } catch (error) {
+                  console.error('Error getting current column widths:', error);
+                }
+
+                // RULE 2: When the app is refreshed, apply the saved column widths
+                // Don't preserve current widths during initialization
                 gridApi.applyColumnState({
                   state: formattedColumnState,
-                  applyOrder: true
+                  applyOrder: true,
+                  defaultState: { width: null } // Clear any default width
                 });
+
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('Applied column state with saved widths during initialization');
+                }
                 needsRefresh = true;
               } catch (error) {
                 console.warn('Failed to apply column state:', error);
@@ -1369,12 +1449,38 @@ export const useGridStore = create<GridStore>()(
       },
 
       saveColumnSettings: (columnField, columnSettings) => {
-        const { settings } = get();
+        const { settings, gridApi } = get();
+
+        // Get the current column width from the grid if available
+        let updatedSettings = { ...columnSettings };
+
+        if (gridApi && typeof gridApi.getColumn === 'function') {
+          try {
+            const column = gridApi.getColumn(columnField);
+            if (column) {
+              // Get the current width from the column state
+              const columnState = gridApi.getColumnState().find((col: any) => col.colId === columnField);
+              if (columnState && columnState.width) {
+                // Update the width in the settings
+                updatedSettings.general = {
+                  ...updatedSettings.general,
+                  width: columnState.width.toString()
+                };
+
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`Captured current width for column ${columnField}: ${columnState.width}px`);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error capturing column width:', error);
+          }
+        }
 
         const profileName = `${columnField}_settings`;
         const updatedProfiles = {
           ...settings.columnSettingsProfiles,
-          [profileName]: columnSettings
+          [profileName]: updatedSettings
         };
 
         // Update settings with new column profiles
@@ -1386,10 +1492,15 @@ export const useGridStore = create<GridStore>()(
           isDirty: true
         }));
 
-        // Note: Don't save to profile here to avoid triggering an extra grid refresh
-        // The profile will be saved when the user explicitly requests it
+        // RULE 1: Don't update the grid after saving settings
+        // The grid already has these settings since we just captured them
 
-        console.log(`Saved column settings for ${columnField}`);
+        // Set the justSaved flag to prevent the grid from refreshing
+        set({ justSaved: true });
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Saved column settings for ${columnField} (no grid update needed)`);
+        }
         return true;
       },
 
@@ -1724,7 +1835,7 @@ export const useGridStore = create<GridStore>()(
         });
       },
 
-      applyColumnSettings: (columnField) => {
+      applyColumnSettings: (columnField, preserveCurrentWidth = false) => {
         // Get fresh references to ensure we have the latest state
         const storeState = get();
         const gridApi = storeState.gridApi;
@@ -1814,11 +1925,62 @@ export const useGridStore = create<GridStore>()(
               colDef.headerName = String(columnSettings.general.headerName);
             }
 
-            // Set width - convert to number and verify it's a valid width
+            // If preserveCurrentWidth is true, get the current width from the grid
+            let currentWidth = null;
+            let hasCurrentWidth = false;
+
+            if (preserveCurrentWidth) {
+              try {
+                // Get the current width from the column state
+                const columnState = operationalGridApi.getColumnState().find((col: any) => col.colId === columnField);
+                if (columnState && columnState.width) {
+                  currentWidth = columnState.width;
+                  hasCurrentWidth = true;
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`Preserving current width for column ${columnField}: ${currentWidth}px`);
+                  }
+                }
+              } catch (error) {
+                console.error('Error getting current column width:', error);
+              }
+            }
+
+            // RULE 2 & 3: When applying settings from a profile, always use the saved width
+            // This ensures consistent behavior when refreshing or switching profiles
             if (columnSettings.general.width) {
               const width = parseInt(columnSettings.general.width, 10);
               if (!isNaN(width) && width > 0) {
                 colDef.width = width;
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`Applied saved width for column ${columnField}: ${width}px`);
+                }
+              }
+            }
+
+            // If we're preserving the current width (e.g., during manual resize),
+            // update the saved width in the profile for future use
+            if (preserveCurrentWidth && hasCurrentWidth) {
+              // Update the saved width in the profile for future use
+              if (columnSettings.general) {
+                columnSettings.general.width = currentWidth.toString();
+
+                // Update the profile in the store
+                const updatedProfiles = { ...settings.columnSettingsProfiles };
+                updatedProfiles[profileName] = columnSettings;
+
+                // Schedule an update to avoid immediate state changes during rendering
+                setTimeout(() => {
+                  set(state => ({
+                    settings: {
+                      ...state.settings,
+                      columnSettingsProfiles: updatedProfiles
+                    }
+                  }));
+                }, 0);
+
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`Updated saved width for column ${columnField}: ${currentWidth}px`);
+                }
               }
             }
 
@@ -2306,7 +2468,8 @@ export const useGridStore = create<GridStore>()(
             }
           }
 
-          // Apply column widths in a batch if specified
+          // RULE 2 & 3: When applying settings from a profile, always use the saved width
+          // This ensures consistent behavior when refreshing or switching profiles
           if (gridApi && typeof gridApi.applyColumnState === 'function') {
             const widthColumnsState = columnsToProcess
               .map(columnField => {
@@ -2318,6 +2481,10 @@ export const useGridStore = create<GridStore>()(
                 const width = parseInt(columnSettings.general.width, 10);
                 if (isNaN(width) || width <= 0) return null;
 
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`Applying saved width for column ${columnField}: ${width}px`);
+                }
+
                 return {
                   colId: columnField,
                   width: width
@@ -2327,10 +2494,17 @@ export const useGridStore = create<GridStore>()(
 
             if (widthColumnsState.length > 0) {
               try {
+                // Apply column widths with higher priority
                 gridApi.applyColumnState({
-                  state: widthColumnsState
+                  state: widthColumnsState,
+                  applyOrder: true, // Ensure the order is respected
+                  defaultState: { width: null } // Clear any default width
                 });
                 needsRefresh = true;
+
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`Applied ${widthColumnsState.length} column widths from profiles`);
+                }
               } catch (error) {
                 console.error('Error applying column width states:', error);
               }
@@ -2482,7 +2656,8 @@ export const useGridStore = create<GridStore>()(
         profiles: state.profiles,
         activeProfileId: state.activeProfileId,
         settings: state.settings,
-        isDirty: state.isDirty
+        isDirty: state.isDirty,
+        justSaved: state.justSaved
       })
     }
   )
