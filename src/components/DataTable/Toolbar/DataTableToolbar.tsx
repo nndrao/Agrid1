@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTheme } from 'next-themes';
+import { useToast } from '@/hooks/use-toast';
 import { ExpressionEditor } from '@/components/ExpressionEditor/ExpressionEditor';
 import { ColumnSettingsDialog } from '@/components/ColumnSettings/ColumnSettingsDialogRefactored';
 import { Column } from 'ag-grid-community';
@@ -165,23 +166,44 @@ export function DataTableToolbar() {
   const [tempFontSize, setTempFontSize] = useState(settings?.fontSize || defaultFontSize);
   const [tempDensity, setTempDensity] = useState(settings?.density || defaultDensity);
 
+  // Import toast for notifications
+  const { toast } = useToast();
+
   // Save profile handling
   const handleSaveProfile = () => {
+    let profileName = '';
+
     if (editingProfile) {
       // Update existing profile
+      profileName = newProfileName || editingProfile.name;
       updateProfile(editingProfile.id, {
-        name: newProfileName || editingProfile.name,
+        name: profileName,
         font: tempFont,
         fontSize: tempFontSize,
         density: tempDensity
       });
+
+      // Show toast notification
+      toast({
+        title: 'Profile Updated',
+        description: `Profile "${profileName}" has been updated`,
+        variant: 'default',
+      });
     } else {
       // Create new profile
+      profileName = newProfileName || `Profile ${profiles.length + 1}`;
       createProfile({
-        name: newProfileName || `Profile ${profiles.length + 1}`,
+        name: profileName,
         font: tempFont,
         fontSize: tempFontSize,
         density: tempDensity
+      });
+
+      // Show toast notification
+      toast({
+        title: 'Profile Created',
+        description: `New profile "${profileName}" has been created`,
+        variant: 'default',
       });
     }
 
@@ -193,7 +215,19 @@ export function DataTableToolbar() {
 
   // Delete profile handling
   const handleDeleteProfile = (profileId: string) => {
+    // Find the profile name before deleting
+    const profileToDelete = profiles.find(p => p.id === profileId);
+    const profileName = profileToDelete?.name || 'Unknown';
+
+    // Delete the profile
     deleteProfile(profileId);
+
+    // Show toast notification
+    toast({
+      title: 'Profile Deleted',
+      description: `Profile "${profileName}" has been deleted`,
+      variant: 'default',
+    });
   };
 
   // Edit profile
@@ -220,7 +254,19 @@ export function DataTableToolbar() {
 
   // Apply profile
   const handleApplyProfile = (profileId: string) => {
+    // Find the profile name before applying
+    const profileToApply = profiles.find(p => p.id === profileId);
+    const profileName = profileToApply?.name || 'Unknown';
+
+    // Apply the profile
     selectProfile(profileId);
+
+    // Show toast notification
+    toast({
+      title: 'Profile Applied',
+      description: `Profile "${profileName}" has been applied`,
+      variant: 'default',
+    });
   };
 
   // Refs for debouncing
@@ -392,6 +438,13 @@ export function DataTableToolbar() {
               } else {
                 // Save current settings to active profile
                 saveSettingsToProfile();
+
+                // Show toast notification
+                toast({
+                  title: 'Settings Saved',
+                  description: `Settings saved to profile "${activeProfile.name}"`,
+                  variant: 'default',
+                });
               }
             }}
             /* Always enabled */

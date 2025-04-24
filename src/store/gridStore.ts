@@ -1131,6 +1131,20 @@ export const useGridStore = create<GridStore>()(
 
           // Set the justSaved flag to prevent the grid from refreshing
           set({ justSaved: true });
+
+          // Show a toast notification
+          if (typeof window !== 'undefined') {
+            // Import toast dynamically to avoid circular dependencies
+            import('@/hooks/use-toast').then(({ toast }) => {
+              toast({
+                title: 'Profile Saved',
+                description: `Settings saved to profile: ${activeProfile.name}`,
+                variant: 'default',
+              });
+            }).catch(error => {
+              console.error('Error showing toast notification:', error);
+            });
+          }
         } else {
           console.log('Profile not updated: either not found or is default profile');
         }
@@ -1500,6 +1514,20 @@ export const useGridStore = create<GridStore>()(
 
         if (process.env.NODE_ENV === 'development') {
           console.log(`Saved column settings for ${columnField} (no grid update needed)`);
+        }
+
+        // Show a toast notification
+        if (typeof window !== 'undefined') {
+          // Import toast dynamically to avoid circular dependencies
+          import('@/hooks/use-toast').then(({ toast }) => {
+            toast({
+              title: 'Column Settings Saved',
+              description: `Settings for column "${columnField}" have been saved`,
+              variant: 'default',
+            });
+          }).catch(error => {
+            console.error('Error showing toast notification:', error);
+          });
         }
         return true;
       },
