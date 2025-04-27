@@ -79,19 +79,6 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       return;
     }
 
-    // Check if settings were just saved - if so, don't apply them back to the grid
-    const { justSaved } = useGridStore.getState();
-
-    if (justSaved) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Skipping grid refresh - settings were just saved');
-      }
-
-      // Reset the justSaved flag
-      useGridStore.setState({ justSaved: false });
-      return;
-    }
-
     if (process.env.NODE_ENV === 'development') {
       console.log('Applying settings and profiles in batch');
     }
@@ -103,6 +90,16 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     applyAllProfiles();
   }, [gridApi, applySettingsToGrid, applyAllProfiles]);
 
+  // Only run effect when active profile changes (not every settings mutation)
+  const activeProfileId = useGridStore(state => state.activeProfileId);
+  useEffect(() => {
+    if (!gridApi) return;
+    // When active profile changes, apply its settings to the grid
+    if (!settings) return;
+    // (You may want to debounce if needed)
+    applyGridSettings();
+  }, [gridApi, activeProfileId]);
+
   // Apply font family CSS variable directly without triggering grid refresh
   useEffect(() => {
     if (settings?.font?.value) {
@@ -110,43 +107,6 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       document.documentElement.style.setProperty('--ag-font-family', settings.font.value);
     }
   }, [settings?.font?.value]);
-
-  // Combine grid state settings into a single effect with a debounce mechanism
-  useEffect(() => {
-    if (!gridApi) return;
-
-    // Check if any grid state settings have changed
-    const hasGridStateChanges = settings?.columnsState || settings?.filterState || settings?.sortState;
-    const hasAdvancedChanges = settings?.rowGroupState || settings?.pivotState || settings?.chartState;
-
-    if (!hasGridStateChanges && !hasAdvancedChanges) return;
-
-    // Use a debounce to avoid multiple rapid updates
-    const debounceTimer = setTimeout(() => {
-      if (process.env.NODE_ENV === 'development') {
-        if (hasGridStateChanges) {
-          console.log('Applying grid state settings (columns/filters/sorts)');
-        }
-        if (hasAdvancedChanges) {
-          console.log('Applying advanced grid settings (groups/pivots/charts)');
-        }
-      }
-
-      // Apply all settings in a single batch
-      applyGridSettings();
-    }, 50); // Short debounce to batch closely-timed updates
-
-    return () => clearTimeout(debounceTimer);
-  }, [
-    gridApi,
-    settings?.columnsState,
-    settings?.filterState,
-    settings?.sortState,
-    settings?.rowGroupState,
-    settings?.pivotState,
-    settings?.chartState,
-    applyGridSettings
-  ]);
 
   // Define default column properties - AG Grid 33+ syntax
   const defaultColDef = useMemo(() => ({

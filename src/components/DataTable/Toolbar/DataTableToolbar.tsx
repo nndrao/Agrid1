@@ -97,7 +97,9 @@ export function DataTableToolbar() {
     updateSettings,
     saveSettingsToProfile,
     getActiveProfile,
-    importProfile
+    importProfile,
+    getColumnSettings,
+    saveColumnSettings
   } = useGridStore();
 
   // Initialize column list when the grid API is available - optimized to reduce re-renders
@@ -171,41 +173,63 @@ export function DataTableToolbar() {
 
   // Save profile handling
   const handleSaveProfile = () => {
-    let profileName = '';
+    // Gather all current settings
+    const profileName = newProfileName.trim() || (editingProfile ? editingProfile.name : `Profile ${profiles.length + 1}`);
+    const timestamp = Date.now();
+
+    // Get all current grid state from gridApi if available
+    let columnsState = null, filterState = null, sortState = null, rowGroupState = null, pivotState = null, chartState = null;
+    if (gridApi) {
+      try { columnsState = gridApi.getColumnState ? gridApi.getColumnState() : null; } catch {}
+      try { filterState = gridApi.getFilterModel ? gridApi.getFilterModel() : null; } catch {}
+      try { sortState = gridApi.getSortModel ? gridApi.getSortModel() : null; } catch {}
+      try { rowGroupState = gridApi.getRowGroupColumns ? gridApi.getRowGroupColumns() : null; } catch {}
+      try { pivotState = gridApi.getPivotColumns ? gridApi.getPivotColumns() : null; } catch {}
+      try { chartState = gridApi.getChartModels ? gridApi.getChartModels() : null; } catch {}
+    }
+
+    // Always include column settings profiles from store settings
+    const columnSettingsProfiles = settings?.columnSettingsProfiles || {};
+    const themeMode = settings?.themeMode || 'system';
+
+    // Construct the new or updated profile object
+    const baseProfile = {
+      name: profileName,
+      font: tempFont,
+      fontSize: tempFontSize,
+      density: tempDensity,
+      columnsState,
+      filterState,
+      sortState,
+      rowGroupState,
+      pivotState,
+      chartState,
+      columnSettingsProfiles,
+      themeMode,
+      updatedAt: timestamp
+    };
 
     if (editingProfile) {
-      // Update existing profile
-      profileName = newProfileName || editingProfile.name;
-      updateProfile(editingProfile.id, {
-        name: profileName,
-        font: tempFont,
-        fontSize: tempFontSize,
-        density: tempDensity
-      });
-
-      // Show toast notification
+      // Update existing profile atomically (DO NOT update settings or trigger grid refresh)
+      updateProfile(editingProfile.id, { ...baseProfile });
       toast({
         title: 'Profile Updated',
         description: `Profile "${profileName}" has been updated`,
         variant: 'default',
       });
     } else {
-      // Create new profile
-      profileName = newProfileName || `Profile ${profiles.length + 1}`;
-      createProfile({
-        name: profileName,
-        font: tempFont,
-        fontSize: tempFontSize,
-        density: tempDensity
-      });
-
-      // Show toast notification
+      // Create new profile atomically
+      const id = `profile-${timestamp}`;
+      createProfile({ ...baseProfile, id, createdAt: timestamp });
       toast({
         title: 'Profile Created',
         description: `New profile "${profileName}" has been created`,
         variant: 'default',
       });
     }
+
+    // Do NOT update settings or activeProfileId here!
+    // If user wants to apply the new profile, they must explicitly select it (or you can auto-select if desired)
 
     // Reset and close dialog
     setProfileDialogOpen(false);

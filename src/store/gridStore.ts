@@ -119,8 +119,8 @@ interface GridStore {
   settings: GridSettings;
   isDirty: boolean;
   justSaved: boolean; // Flag to indicate if settings were just saved
-
-  // Grid API reference for operations
+  suppressGridRefresh: boolean; // Prevent grid refresh during profile save
+  skipNextGridRefresh: number; // Counter to skip grid refresh after profile save
   gridApi: any | null;
 
   // Actions
@@ -198,6 +198,8 @@ export const useGridStore = create<GridStore>()(
 
       isDirty: false,
       justSaved: false, // Flag to indicate if settings were just saved
+      suppressGridRefresh: false, // Prevent grid refresh during profile save
+      skipNextGridRefresh: 0, // Counter to skip grid refresh after profile save
       gridApi: null,
 
       // Initialize store with default values
@@ -643,8 +645,8 @@ export const useGridStore = create<GridStore>()(
                     }
                   });
                   needsGridRefresh = true;
-                } catch (e) {
-                  console.warn('Error applying column state:', e);
+                } catch (error) {
+                  console.warn('Error applying column state:', error);
                 }
               }
 
@@ -654,8 +656,8 @@ export const useGridStore = create<GridStore>()(
                   // Always set filter model, even if null/empty to clear existing filters
                   gridApi.setFilterModel(newSettings.filterState || null);
                   needsGridRefresh = true;
-                } catch (e) {
-                  console.warn('Error applying filter state:', e);
+                } catch (error) {
+                  console.warn('Error applying filter state:', error);
                 }
               }
 
@@ -668,8 +670,8 @@ export const useGridStore = create<GridStore>()(
                     newSettings.sortState.length > 0) ? newSettings.sortState : null
                   );
                   needsGridRefresh = true;
-                } catch (e) {
-                  console.warn('Error applying sort state:', e);
+                } catch (error) {
+                  console.warn('Error applying sort state:', error);
                 }
               }
 
@@ -1127,7 +1129,6 @@ export const useGridStore = create<GridStore>()(
 
           // RULE 1: When saving settings, don't update the grid after the save
           // The grid already has these settings since we just captured them
-          console.log('Profile saved successfully - no need to apply settings back to grid');
 
           // Set the justSaved flag to prevent the grid from refreshing
           set({ justSaved: true });
@@ -2685,7 +2686,9 @@ export const useGridStore = create<GridStore>()(
         activeProfileId: state.activeProfileId,
         settings: state.settings,
         isDirty: state.isDirty,
-        justSaved: state.justSaved
+        justSaved: state.justSaved,
+        suppressGridRefresh: state.suppressGridRefresh,
+        skipNextGridRefresh: state.skipNextGridRefresh
       })
     }
   )
