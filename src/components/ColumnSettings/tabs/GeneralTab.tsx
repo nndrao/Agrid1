@@ -20,21 +20,8 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ settings, onUpdate, sele
     console.log('GeneralTab: handleUpdate called with', updates);
     onUpdate(updates);
   };
-  const [localHeaderName, setLocalHeaderName] = useState(settings.headerName || '');
   const headerInputRef = useRef<HTMLInputElement>(null);
   const initialRenderRef = useRef(true);
-
-  // Update local state when settings change from parent or when selected column changes
-  useEffect(() => {
-    setLocalHeaderName(settings.headerName || '');
-  }, [settings.headerName, selectedColumn]);
-
-  // Apply changes to parent component
-  const handleHeaderChange = () => {
-    if (localHeaderName !== settings.headerName) {
-      handleUpdate({ headerName: localHeaderName });
-    }
-  };
 
   // Only log updates on dependency changes, not every render
   useEffect(() => {
@@ -56,17 +43,15 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ settings, onUpdate, sele
             key={`header-name-input-${selectedColumn}`}
             id="header-name"
             ref={headerInputRef}
-            value={localHeaderName}
+            value={settings.headerName}
             onChange={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              setLocalHeaderName(e.target.value);
+              handleUpdate({ headerName: e.target.value });
             }}
-            onBlur={handleHeaderChange}
             onKeyDown={(e) => {
               e.stopPropagation();
               if (e.key === 'Enter') {
-                handleHeaderChange();
                 e.preventDefault();
               }
             }}
