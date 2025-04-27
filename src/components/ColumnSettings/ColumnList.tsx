@@ -6,12 +6,14 @@ interface ColumnListProps {
   columns: string[];
   selectedColumn: string;
   onSelectColumn: (column: string) => void;
+  modifiedColumns?: string[];
 }
 
 export const ColumnList: React.FC<ColumnListProps> = ({
   columns,
   selectedColumn,
-  onSelectColumn
+  onSelectColumn,
+  modifiedColumns = []
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -37,12 +39,23 @@ export const ColumnList: React.FC<ColumnListProps> = ({
             size="sm"
             className={`w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal rounded-lg mb-1 ${col === selectedColumn ? 'font-semibold' : ''}`}
             type="button"
-            onClick={() => onSelectColumn(col)}
+            onClick={() => {
+              // This will trigger the useEffect in the parent that saves the current column state
+              onSelectColumn(col);
+            }}
           >
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" className="text-muted-foreground">
-              <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-            </svg>
-            {col}
+            <div className="flex items-center gap-2 min-w-[16px]">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" className="text-muted-foreground">
+                <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+              {modifiedColumns.includes(col) && (
+                <span className="h-2 w-2 rounded-full bg-blue-500 absolute ml-[10px] mt-[-8px]" title="Modified"></span>
+              )}
+            </div>
+            <span className="truncate">
+              {col}
+              {modifiedColumns.includes(col) && " *"}
+            </span>
           </Button>
         ))}
       </div>

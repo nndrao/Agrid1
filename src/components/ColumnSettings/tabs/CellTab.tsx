@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StylePreview } from '../StylePreview';
 import { StyleSection } from '../StyleSection';
 import { FormField } from '../FormField';
@@ -22,27 +22,55 @@ export const CellTab: React.FC<CellTabProps> = ({ settings, onUpdate }) => {
     console.log('CellTab: handleUpdate called with', updates);
     onUpdate(updates);
   };
-  return (
-    <div className="bg-card border border-border/80 shadow-none rounded-lg mb-3 p-5">
-      {/* Apply Styles Checkbox */}
-      <div className="flex items-center space-x-2 mb-4 p-2 bg-muted/30 rounded">
-        <Checkbox
-          id="apply-cell-styles"
-          checked={settings.applyStyles}
-          onCheckedChange={(checked) => {
-            // Pass the value as a direct boolean
-            const applyStyles = checked === true;
-            console.log(`Setting cell.applyStyles to ${applyStyles} (${typeof applyStyles})`);
-            handleUpdate({ applyStyles });
-          }}
-        />
-        <Label htmlFor="apply-cell-styles" className="text-sm font-medium cursor-pointer">
-          Apply these styles to the grid cells
-        </Label>
-      </div>
 
-      {/* Preview */}
-      <StylePreview label="Preview" value="Cell Preview" />
+  // Memoize preview styles to prevent unnecessary re-renders but update when settings change
+  const previewStyles = useMemo(() => {
+    return settings.applyStyles ? settings : undefined;
+  }, [
+    settings.applyStyles,
+    settings.fontFamily,
+    settings.fontSize,
+    settings.fontWeight,
+    settings.bold,
+    settings.italic,
+    settings.underline,
+    settings.textColor,
+    settings.backgroundColor,
+    settings.alignH,
+    settings.borderStyle,
+    settings.borderWidth,
+    settings.borderColor,
+    settings.borderSides
+  ]);
+  
+  return (
+    <div className="bg-card border border-border/80 shadow-none rounded-lg mb-3 p-4">
+      {/* Top section with checkbox and preview */}
+      <div className="flex flex-col space-y-2 mb-3">
+        {/* Apply Styles Checkbox */}
+        <div className="flex items-center space-x-2 py-1 px-2 bg-muted/30 rounded">
+          <Checkbox
+            id="apply-cell-styles"
+            checked={settings.applyStyles}
+            onCheckedChange={(checked) => {
+              // Pass the value as a direct boolean
+              const applyStyles = checked === true;
+              console.log(`Setting cell.applyStyles to ${applyStyles} (${typeof applyStyles})`);
+              handleUpdate({ applyStyles });
+            }}
+          />
+          <Label htmlFor="apply-cell-styles" className="text-sm font-medium cursor-pointer">
+            Apply these styles to the grid cells
+          </Label>
+        </div>
+        
+        {/* Preview with dynamic styles */}
+        <StylePreview 
+          label="" 
+          value="Cell Preview" 
+          styles={previewStyles}
+        />
+      </div>
 
       {/* Typography */}
       <StyleSection title="Typography">

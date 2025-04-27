@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -39,72 +39,114 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
   // Use grid store for state management instead of local hook
   const gridStore = useGridStore();
   
-  // Local state to use while editing
+  // Local state to use while editing current column
   const [state, setState] = useState<ColumnSettingsState | null>(null);
+  
+  // Map to store settings for all modified columns
+  const [modifiedColumnsMap, setModifiedColumnsMap] = useState<Record<string, ColumnSettingsState>>({});
+  
+  // Track previously selected column to save changes when changing selection
+  const prevSelectedColumnRef = useRef<string | null>(null);
+  
+  // Get default settings for a column
+  const getDefaultSettings = (colId: string): ColumnSettingsState => ({
+    general: {
+      headerName: colId,
+      width: '120',
+      columnType: 'Default',
+      pinnedPosition: 'Not pinned',
+      filter: 'Enabled',
+      filterType: 'Auto',
+      sortable: true,
+      resizable: true,
+      hidden: false,
+      editable: true,
+    },
+    header: {
+      // CRITICAL: Ensure this is an explicit boolean
+      applyStyles: false,
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      fontWeight: 'Normal',
+      bold: false,
+      italic: false,
+      underline: false,
+      textColor: '#000000',
+      backgroundColor: '#FFFFFF',
+      alignH: 'left',
+      borderStyle: 'Solid',
+      borderWidth: 1,
+      borderColor: '#000000',
+      borderSides: 'All',
+    },
+    cell: {
+      // CRITICAL: Ensure this is an explicit boolean
+      applyStyles: false, 
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      fontWeight: 'Normal',
+      bold: false,
+      italic: false,
+      underline: false,
+      textColor: '#000000',
+      backgroundColor: '#FFFFFF',
+      alignH: 'left',
+      borderStyle: 'Solid',
+      borderWidth: 1,
+      borderColor: '#000000',
+      borderSides: 'All',
+    }
+  });
 
-  // Load column settings from grid store when dialog opens or column changes
+  // Previous selected column tracking
+  const prevSelectedColumnValue = useRef<string | null>(null);
+  
+  // Effect to save current state when column changes
+  useEffect(() => {
+    // Only proceed if the column has actually changed
+    if (prevSelectedColumnValue.current !== selectedColumn) {
+      // Save settings for the previous column
+      if (prevSelectedColumnRef.current && state) {
+        // Check if the state is actually different from original
+        const originalSettings = gridStore.getColumnSettings(prevSelectedColumnRef.current);
+        const hasChanges = !originalSettings || 
+          JSON.stringify(originalSettings) !== JSON.stringify(state);
+        
+        if (hasChanges) {
+          setModifiedColumnsMap(prev => ({
+            ...prev,
+            [prevSelectedColumnRef.current!]: JSON.parse(JSON.stringify(state))
+          }));
+        }
+      }
+      
+      // Update previous column ref
+      prevSelectedColumnRef.current = selectedColumn;
+      
+      // Update tracking value for next comparison
+      prevSelectedColumnValue.current = selectedColumn;
+    }
+  }, [selectedColumn, state, gridStore]);
+  
+  // Load settings when column changes or dialog opens
   useEffect(() => {
     if (open && selectedColumn) {
-      // Get column settings from store
-      const settings = gridStore.getColumnSettings(selectedColumn);
-      
-      if (settings) {
-        console.log(`Loaded settings for column ${selectedColumn} from grid store`);
-        setState(settings);
+      // Check if we already have modified settings for this column
+      if (modifiedColumnsMap[selectedColumn]) {
+        setState(modifiedColumnsMap[selectedColumn]);
       } else {
-        // If no settings, create default state with explicit boolean values
-        console.log(`No settings found for column ${selectedColumn}, using defaults`);
-        setState({
-          general: {
-            headerName: selectedColumn,
-            width: '120',
-            columnType: 'Default',
-            pinnedPosition: 'Not pinned',
-            filter: 'Enabled',
-            filterType: 'Auto',
-            sortable: true,
-            resizable: true,
-            hidden: false,
-            editable: true,
-          },
-          header: {
-            // CRITICAL: Ensure this is an explicit boolean
-            applyStyles: false,
-            fontFamily: 'Arial',
-            fontSize: '14px',
-            fontWeight: 'Normal',
-            bold: false,
-            italic: false,
-            underline: false,
-            textColor: '#000000',
-            backgroundColor: '#FFFFFF',
-            alignH: 'left',
-            borderStyle: 'Solid',
-            borderWidth: 1,
-            borderColor: '#000000',
-            borderSides: 'All',
-          },
-          cell: {
-            // CRITICAL: Ensure this is an explicit boolean
-            applyStyles: false, 
-            fontFamily: 'Arial',
-            fontSize: '14px',
-            fontWeight: 'Normal',
-            bold: false,
-            italic: false,
-            underline: false,
-            textColor: '#000000',
-            backgroundColor: '#FFFFFF',
-            alignH: 'left',
-            borderStyle: 'Solid',
-            borderWidth: 1,
-            borderColor: '#000000',
-            borderSides: 'All',
-          }
-        });
+        // Otherwise get from store
+        const settings = gridStore.getColumnSettings(selectedColumn);
+        
+        if (settings) {
+          setState(settings);
+        } else {
+          // If no settings, create default state
+          setState(getDefaultSettings(selectedColumn));
+        }
       }
     }
-  }, [open, selectedColumn, gridStore]);
+  }, [open, selectedColumn, modifiedColumnsMap, gridStore]);
 
   // Update section handlers
   const updateGeneral = (updates: Partial<ColumnSettingsState['general']>) => {
@@ -140,23 +182,32 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
     });
   };
 
+  // Function to check if state has changed from the original settings
+  const hasStateChanged = useCallback(() => {
+    if (!selectedColumn || !state) return false;
+    
+    const originalSettings = gridStore.getColumnSettings(selectedColumn);
+    if (!originalSettings) return true; // If no original settings, any state represents a change
+    
+    // Deep comparison to see if there are real changes
+    return JSON.stringify(originalSettings) !== JSON.stringify(state);
+  }, [state, selectedColumn, gridStore]);
+
   // Handle apply changes with direct column API access - optimized for performance
   const handleApplyChanges = () => {
-    if (!state || !selectedColumn) return;
-    
-    console.log('Applying changes to grid for column:', selectedColumn);
+    if (!state) return;
     
     try {
-      // Create a clean copy of state and ensure all boolean values are explicit
-      const sanitizedState = JSON.parse(JSON.stringify(state));
+      // First check if the current column needs to be added to the map
+      const currentColChanged = hasStateChanged();
       
-      // Ensure style flags are explicit booleans
-      sanitizedState.header.applyStyles = sanitizedState.header.applyStyles === true;
-      sanitizedState.cell.applyStyles = sanitizedState.cell.applyStyles === true;
-      
-      // Save settings to grid store
-      console.log(`Saving sanitized settings for column ${selectedColumn} to store`);
-      gridStore.saveColumnSettings(selectedColumn, sanitizedState);
+      // First save the current column's state to our map if it has changed
+      if (selectedColumn && state && currentColChanged) {
+        setModifiedColumnsMap(prev => ({
+          ...prev,
+          [selectedColumn]: JSON.parse(JSON.stringify(state))
+        }));
+      }
       
       // Get the gridApi from the store or window.__gridApi
       const api = gridStore.gridApi || ((typeof window !== 'undefined') ? (window as any).__gridApi : null);
@@ -167,11 +218,38 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
         return;
       }
       
-      // Apply settings using the store's optimized batch method
-      console.log('Applying column settings using store method');
-      gridStore.applyColumnSettings(selectedColumn);
+      // Compile list of all columns to update
+      const allColumnsToUpdate = {...modifiedColumnsMap};
       
-      // Close the dialog immediately - no need for setTimeout
+      // Add the currently selected column if it's not already in the map
+      if (selectedColumn && state && !allColumnsToUpdate[selectedColumn]) {
+        allColumnsToUpdate[selectedColumn] = JSON.parse(JSON.stringify(state));
+      }
+      
+      // Apply changes for all modified columns
+      const columnIds = Object.keys(allColumnsToUpdate);
+      console.log(`Applying changes to ${columnIds.length} columns:`, columnIds.join(', '));
+      
+      // Apply each column's settings
+      for (const colId of columnIds) {
+        const columnState = allColumnsToUpdate[colId];
+        
+        // Ensure style flags are explicit booleans for each column
+        const sanitizedState = JSON.parse(JSON.stringify(columnState));
+        sanitizedState.header.applyStyles = sanitizedState.header.applyStyles === true;
+        sanitizedState.cell.applyStyles = sanitizedState.cell.applyStyles === true;
+        
+        // Save settings to grid store for each column
+        gridStore.saveColumnSettings(colId, sanitizedState);
+        
+        // Apply settings using the store's optimized batch method
+        gridStore.applyColumnSettings(colId);
+      }
+      
+      // Reset the modified columns map
+      setModifiedColumnsMap({});
+      
+      // Close the dialog immediately
       onOpenChange(false);
     } catch (error) {
       console.error('Error when applying column settings:', error);
@@ -181,59 +259,45 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
 
   // Handle reset
   const handleReset = () => {
-    // Reset to original loaded settings or defaults
-    if (open && selectedColumn) {
-      const settings = gridStore.getColumnSettings(selectedColumn);
+    const modifiedCount = Object.keys(modifiedColumnsMap).length;
+    
+    // Only show prompt if there are multiple columns modified
+    let resetAllColumns = false;
+    if (modifiedCount > 1) {
+      resetAllColumns = window.confirm(`Reset settings for all ${modifiedCount} modified columns? Click Cancel to reset only the current column.`);
+    }
+    
+    if (resetAllColumns) {
+      // Reset the entire modified columns map
+      setModifiedColumnsMap({});
       
-      if (settings) {
-        setState(settings);
-      } else {
-        setState({
-          general: {
-            headerName: selectedColumn,
-            width: '120',
-            columnType: 'Default',
-            pinnedPosition: 'Not pinned',
-            filter: 'Enabled',
-            filterType: 'Auto',
-            sortable: true,
-            resizable: true,
-            hidden: false,
-            editable: true,
-          },
-          header: {
-            applyStyles: false,
-            fontFamily: 'Arial',
-            fontSize: '14px',
-            fontWeight: 'Normal',
-            bold: false,
-            italic: false,
-            underline: false,
-            textColor: '#000000',
-            backgroundColor: '#FFFFFF',
-            alignH: 'left',
-            borderStyle: 'Solid',
-            borderWidth: 1,
-            borderColor: '#000000',
-            borderSides: 'All',
-          },
-          cell: {
-            applyStyles: false,
-            fontFamily: 'Arial',
-            fontSize: '14px',
-            fontWeight: 'Normal',
-            bold: false,
-            italic: false,
-            underline: false,
-            textColor: '#000000',
-            backgroundColor: '#FFFFFF',
-            alignH: 'left',
-            borderStyle: 'Solid',
-            borderWidth: 1,
-            borderColor: '#000000',
-            borderSides: 'All',
-          }
-        });
+      // Reset current column to original state
+      if (open && selectedColumn) {
+        const settings = gridStore.getColumnSettings(selectedColumn);
+        
+        if (settings) {
+          setState(settings);
+        } else {
+          setState(getDefaultSettings(selectedColumn));
+        }
+      }
+    } else {
+      // Reset only the current column
+      if (open && selectedColumn) {
+        const settings = gridStore.getColumnSettings(selectedColumn);
+        
+        if (settings) {
+          setState(settings);
+        } else {
+          setState(getDefaultSettings(selectedColumn));
+        }
+        
+        // Also remove it from the modified columns map
+        if (modifiedColumnsMap[selectedColumn]) {
+          const newMap = {...modifiedColumnsMap};
+          delete newMap[selectedColumn];
+          setModifiedColumnsMap(newMap);
+        }
       }
     }
   };
@@ -265,6 +329,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
             columns={columnList}
             selectedColumn={selectedColumn}
             onSelectColumn={onSelectColumn}
+            modifiedColumns={Object.keys(modifiedColumnsMap)}
           />
           
           {/* Main Content */}
@@ -318,13 +383,22 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
         
         {/* Footer: match Expression Editor dialog */}
         <div className="flex justify-between border-t border-border/80" style={{ minHeight: '48px', display: 'flex', alignItems: 'center', padding: '10px 16px' }}>
-          <Button 
-            variant="outline" 
-            className="h-8 px-5 text-[13px] border border-border/80 bg-card text-foreground hover:bg-accent hover:text-foreground" 
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
+          <div className="flex items-center">
+            <Button 
+              variant="outline" 
+              className="h-8 px-5 text-[13px] border border-border/80 bg-card text-foreground hover:bg-accent hover:text-foreground" 
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            
+            {/* Show modified columns count */}
+            {Object.keys(modifiedColumnsMap).length > 0 && (
+              <span className="ml-3 text-sm text-muted-foreground">
+                {Object.keys(modifiedColumnsMap).length} column{Object.keys(modifiedColumnsMap).length !== 1 ? 's' : ''} modified
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button 
               variant="outline" 
@@ -337,6 +411,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
               type="submit" 
               className="h-8 px-5 text-[13px] bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" 
               onClick={handleApplyChanges}
+              disabled={Object.keys(modifiedColumnsMap).length === 0 && !hasStateChanged()}
             >
               Apply Changes
             </Button>
