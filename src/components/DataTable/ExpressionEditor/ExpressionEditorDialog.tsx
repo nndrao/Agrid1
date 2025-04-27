@@ -1,14 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Play, Save, X, Code, List } from 'lucide-react';
+import { Search, Play, Save, Code, List } from 'lucide-react';
 import { ExpressionEditorProps, ExpressionType } from './types';
 import { ExpressionEditor } from './ExpressionEditor';
 import { getFunctionsByCategory, functionCategories } from './functions';
-import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 const operators = [

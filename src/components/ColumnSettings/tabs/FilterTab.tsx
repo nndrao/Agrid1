@@ -1,13 +1,11 @@
 import React from 'react';
 import { TabSection } from '../TabSection';
-import { FormField } from '../FormField';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
-interface FilterTabProps {
-  // We'll add proper state management for this tab in a future step
-}
+// This component doesn't need props yet
+type FilterTabProps = Record<string, never>;
 
 export const FilterTab: React.FC<FilterTabProps> = () => {
   return (

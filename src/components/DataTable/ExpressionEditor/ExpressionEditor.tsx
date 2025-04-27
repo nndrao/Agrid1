@@ -4,14 +4,12 @@ import { cn } from '@/lib/utils';
 interface ExpressionEditorProps {
   value: string;
   onChange: (value: string) => void;
-  columnDefs: any[];
   className?: string;
 }
 
 export const ExpressionEditor = forwardRef<HTMLTextAreaElement, ExpressionEditorProps>(({
   value,
   onChange,
-  columnDefs,
   className
 }, ref) => {
   const localRef = useRef<HTMLTextAreaElement>(null);

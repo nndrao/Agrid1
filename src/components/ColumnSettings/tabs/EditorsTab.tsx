@@ -1,13 +1,11 @@
 import React from 'react';
 import { TabSection } from '../TabSection';
-import { FormField } from '../FormField';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
-interface EditorsTabProps {
-  // We'll add proper state management for this tab in a future step
-}
+// This component doesn't need props yet
+type EditorsTabProps = Record<string, never>;
 
 export const EditorsTab: React.FC<EditorsTabProps> = () => {
   return (

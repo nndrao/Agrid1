@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TokenType } from './parser';
-import { getFunctionsByCategory, getFunctionByName } from './functions';
+import { getFunctionsByCategory } from './functions';
 import { cn } from '@/lib/utils';
 
 interface Suggestion {

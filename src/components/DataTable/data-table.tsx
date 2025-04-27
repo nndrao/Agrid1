@@ -29,7 +29,10 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     gridApi,
     setGridApi,
     initializeStore,
-    applySettingsToGrid
+    applySettingsToGrid,
+    getActiveProfile,
+    getColumnSettings,
+    applyColumnSettings
   } = useGridStore();
 
   // Local state
@@ -162,7 +165,35 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
 
       // Use a short timeout to ensure the grid is fully rendered
       setTimeout(() => {
+        // Apply settings from current profile
         applyGridSettings();
+        
+        // Force apply column profiles specifically for reload case
+        // This is critical to ensure profile settings are applied on refresh
+        try {
+          const activeProfile = getActiveProfile();
+          if (activeProfile) {
+            console.log('Forcibly applying column profiles for', activeProfile.name, 'during initialization');
+            // Apply all column profiles stored in the active profile
+            const columns = api.getColumns();
+            if (columns && columns.length > 0) {
+              let appliedCount = 0;
+              columns.forEach(column => {
+                const colId = column.getColId();
+                if (colId) {
+                  const settings = getColumnSettings(colId);
+                  if (settings) {
+                    applyColumnSettings(colId);
+                    appliedCount++;
+                  }
+                }
+              });
+              console.log(`Applied profile settings to ${appliedCount} columns during initialization`);
+            }
+          }
+        } catch (error) {
+          console.error('Error applying column profiles during initialization:', error);
+        }
 
         // Set initial focus to first cell
         const columns = api.getColumns();
@@ -171,7 +202,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         }
       }, 50);
     }
-  }, [setGridApi, applyGridSettings]);
+  }, [setGridApi, applyGridSettings, getActiveProfile, getColumnSettings, applyColumnSettings]);
 
   // Handle grid ready event - AG Grid 33+ approach with single initialization
   const onGridReady = useCallback((params: GridReadyEvent) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { TabSection } from '../TabSection';
 import { FormField } from '../FormField';
 import { Input } from '@/components/ui/input';
@@ -9,10 +9,10 @@ import { columnTypes, pinnedPositions, filterOptions, filterTypes, ColumnSetting
 interface GeneralTabProps {
   settings: ColumnSettingsState['general'];
   onUpdate: (updates: Partial<ColumnSettingsState['general']>) => void;
-  selectedColumn: string;
+  selectedColumn?: string;
 }
 
-export const GeneralTab: React.FC<GeneralTabProps> = ({ settings, onUpdate, selectedColumn }) => {
+export const GeneralTab: React.FC<GeneralTabProps> = ({ settings, onUpdate, selectedColumn = '' }) => {
   console.log('GeneralTab render with settings:', settings, 'for column:', selectedColumn);
 
   // Create a wrapper for onUpdate to add debugging
