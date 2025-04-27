@@ -1554,19 +1554,27 @@ export const useGridStore = create<GridStore>()(
         const style = styles;
 
         if (style) {
-          // Build style string with individual properties
+          // Build style string with individual properties - only include defined properties
           let cssProps = '';
           if (style.fontFamily) cssProps += `font-family: ${style.fontFamily} !important; `;
           if (style.fontSize) cssProps += `font-size: ${style.fontSize} !important; `;
           if (style.bold) cssProps += 'font-weight: bold !important; ';
           if (style.italic) cssProps += 'font-style: italic !important; ';
           if (style.underline) cssProps += 'text-decoration: underline !important; ';
-          if (style.textColor) cssProps += `color: ${style.textColor} !important; `;
-          if (style.backgroundColor) cssProps += `background-color: ${style.backgroundColor} !important; `;
+          
+          // Only include text color if it's explicitly defined (not undefined)
+          if (style.textColor !== undefined) cssProps += `color: ${style.textColor} !important; `;
+          
+          // Only include background color if it's explicitly defined (not undefined)
+          if (style.backgroundColor !== undefined) cssProps += `background-color: ${style.backgroundColor} !important; `;
+          
           if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
 
-          // Add border styles if specified
-          if (style.borderStyle && style.borderWidth && style.borderColor && style.borderSides) {
+          // Add border styles if all required properties are explicitly defined
+          if (style.borderStyle !== undefined && 
+              style.borderWidth !== undefined && 
+              style.borderColor !== undefined && 
+              style.borderSides !== undefined) {
             const borderStyle = `${style.borderWidth}px ${style.borderStyle.toLowerCase()} ${style.borderColor}`;
             const borderProperty = style.borderSides === 'All' ? 'border' : `border-${style.borderSides.toLowerCase()}`;
             cssProps += `${borderProperty}: ${borderStyle} !important; `;
@@ -1641,19 +1649,27 @@ export const useGridStore = create<GridStore>()(
         const style = styles;
 
         if (style) {
-          // Build style string with individual properties
+          // Build style string with individual properties - only include defined properties
           let cssProps = '';
           if (style.fontFamily) cssProps += `font-family: ${style.fontFamily} !important; `;
           if (style.fontSize) cssProps += `font-size: ${style.fontSize} !important; `;
           if (style.bold) cssProps += 'font-weight: bold !important; ';
           if (style.italic) cssProps += 'font-style: italic !important; ';
           if (style.underline) cssProps += 'text-decoration: underline !important; ';
-          if (style.textColor) cssProps += `color: ${style.textColor} !important; `;
-          if (style.backgroundColor) cssProps += `background-color: ${style.backgroundColor} !important; `;
+          
+          // Only include text color if it's explicitly defined (not undefined)
+          if (style.textColor !== undefined) cssProps += `color: ${style.textColor} !important; `;
+          
+          // Only include background color if it's explicitly defined (not undefined)
+          if (style.backgroundColor !== undefined) cssProps += `background-color: ${style.backgroundColor} !important; `;
+          
           if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
 
-          // Add border styles if specified
-          if (style.borderStyle && style.borderWidth && style.borderColor && style.borderSides) {
+          // Add border styles if all required properties are explicitly defined
+          if (style.borderStyle !== undefined && 
+              style.borderWidth !== undefined && 
+              style.borderColor !== undefined && 
+              style.borderSides !== undefined) {
             const borderStyle = `${style.borderWidth}px ${style.borderStyle.toLowerCase()} ${style.borderColor}`;
             const borderProperty = style.borderSides === 'All' ? 'border' : `border-${style.borderSides.toLowerCase()}`;
             cssProps += `${borderProperty}: ${borderStyle} !important; `;
@@ -2077,69 +2093,129 @@ export const useGridStore = create<GridStore>()(
           }
 
           // Apply header styles using batched operations
-          if (columnSettings.header && columnSettings.header.applyStyles === true) {
-            // Set header class with both attribute and function approach for maximum compatibility
-            colDef.headerClass = (params) => {
-              // Return both the custom class and any existing classes
-              const existingClasses = typeof colDef.headerClass === 'string'
-                ? colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`)
-                : [];
-              return [`custom-header-${columnField}`, ...existingClasses].join(' ');
-            };
-
-            // Batch header styles through the store
-            get().batchApplyHeaderStyles(columnField, columnSettings.header);
-          } else {
-            // Remove header class but keep any other classes that might be there
-            if (typeof colDef.headerClass === 'string') {
-              // Remove only our custom class
-              const classes = colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`);
-              colDef.headerClass = classes.length > 0 ? classes.join(' ') : undefined;
-            } else {
-              colDef.headerClass = undefined;
+          if (columnSettings.header) {
+            // Create a styles object containing only the properties that should be applied
+            const headerStyles = { ...columnSettings.header };
+            
+            // Remove text color if not applied
+            if (!columnSettings.header.applyTextColor) {
+              headerStyles.textColor = undefined;
+            }
+            
+            // Remove background color if not applied
+            if (!columnSettings.header.applyBackgroundColor) {
+              headerStyles.backgroundColor = undefined;
+            }
+            
+            // Remove border properties if not applied
+            if (!columnSettings.header.applyBorder) {
+              headerStyles.borderStyle = undefined;
+              headerStyles.borderWidth = undefined;
+              headerStyles.borderColor = undefined;
+              headerStyles.borderSides = undefined;
             }
 
-            // Clear any existing header styles for this column
-            ['header-style-', 'direct-header-style-', 'emergency-header-style-'].forEach(prefix => {
-              const styleElement = document.getElementById(`${prefix}${columnField}`);
-              if (styleElement) {
-                console.log(`Removing header style element: ${prefix}${columnField}`);
-                styleElement.remove();
+            // Legacy check for backward compatibility
+            const shouldApplyStyles = 
+              headerStyles.applyStyles === true || 
+              headerStyles.applyTextColor === true || 
+              headerStyles.applyBackgroundColor === true || 
+              headerStyles.applyBorder === true;
+            
+            if (shouldApplyStyles) {
+              // Set header class with both attribute and function approach for maximum compatibility
+              colDef.headerClass = (params) => {
+                // Return both the custom class and any existing classes
+                const existingClasses = typeof colDef.headerClass === 'string'
+                  ? colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`)
+                  : [];
+                return [`custom-header-${columnField}`, ...existingClasses].join(' ');
+              };
+  
+              // Batch header styles through the store
+              get().batchApplyHeaderStyles(columnField, headerStyles);
+            } else {
+              // Remove header class but keep any other classes that might be there
+              if (typeof colDef.headerClass === 'string') {
+                // Remove only our custom class
+                const classes = colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`);
+                colDef.headerClass = classes.length > 0 ? classes.join(' ') : undefined;
+              } else {
+                colDef.headerClass = undefined;
               }
-            });
+  
+              // Clear any existing header styles for this column
+              ['header-style-', 'direct-header-style-', 'emergency-header-style-'].forEach(prefix => {
+                const styleElement = document.getElementById(`${prefix}${columnField}`);
+                if (styleElement) {
+                  console.log(`Removing header style element: ${prefix}${columnField}`);
+                  styleElement.remove();
+                }
+              });
+            }
           }
 
           // Apply cell styles using batched operations
-          if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
-            // Set cell class with both attribute and function approach for maximum compatibility
-            colDef.cellClass = (params) => {
-              // Return both the custom class and any existing classes
-              const existingClasses = typeof colDef.cellClass === 'string'
-                ? colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`)
-                : [];
-              return [`custom-cell-${columnField}`, ...existingClasses].join(' ');
-            };
-
-            // Batch cell styles through the store
-            get().batchApplyCellStyles(columnField, columnSettings.cell);
-          } else {
-            // Remove cell class but keep any other classes that might be there
-            if (typeof colDef.cellClass === 'string') {
-              // Remove only our custom class
-              const classes = colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`);
-              colDef.cellClass = classes.length > 0 ? classes.join(' ') : undefined;
-            } else {
-              colDef.cellClass = undefined;
+          if (columnSettings.cell) {
+            // Create a styles object containing only the properties that should be applied
+            const cellStyles = { ...columnSettings.cell };
+            
+            // Remove text color if not applied
+            if (!columnSettings.cell.applyTextColor) {
+              cellStyles.textColor = undefined;
+            }
+            
+            // Remove background color if not applied
+            if (!columnSettings.cell.applyBackgroundColor) {
+              cellStyles.backgroundColor = undefined;
+            }
+            
+            // Remove border properties if not applied
+            if (!columnSettings.cell.applyBorder) {
+              cellStyles.borderStyle = undefined;
+              cellStyles.borderWidth = undefined;
+              cellStyles.borderColor = undefined;
+              cellStyles.borderSides = undefined;
             }
 
-            // Clear any existing cell styles for this column
-            ['cell-style-', 'direct-cell-style-', 'emergency-cell-style-'].forEach(prefix => {
-              const styleElement = document.getElementById(`${prefix}${columnField}`);
-              if (styleElement) {
-                console.log(`Removing cell style element: ${prefix}${columnField}`);
-                styleElement.remove();
+            // Legacy check for backward compatibility
+            const shouldApplyStyles = 
+              cellStyles.applyStyles === true || 
+              cellStyles.applyTextColor === true || 
+              cellStyles.applyBackgroundColor === true || 
+              cellStyles.applyBorder === true;
+            
+            if (shouldApplyStyles) {
+              // Set cell class with both attribute and function approach for maximum compatibility
+              colDef.cellClass = (params) => {
+                // Return both the custom class and any existing classes
+                const existingClasses = typeof colDef.cellClass === 'string'
+                  ? colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`)
+                  : [];
+                return [`custom-cell-${columnField}`, ...existingClasses].join(' ');
+              };
+  
+              // Batch cell styles through the store
+              get().batchApplyCellStyles(columnField, cellStyles);
+            } else {
+              // Remove cell class but keep any other classes that might be there
+              if (typeof colDef.cellClass === 'string') {
+                // Remove only our custom class
+                const classes = colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`);
+                colDef.cellClass = classes.length > 0 ? classes.join(' ') : undefined;
+              } else {
+                colDef.cellClass = undefined;
               }
-            });
+  
+              // Clear any existing cell styles for this column
+              ['cell-style-', 'direct-cell-style-', 'emergency-cell-style-'].forEach(prefix => {
+                const styleElement = document.getElementById(`${prefix}${columnField}`);
+                if (styleElement) {
+                  console.log(`Removing cell style element: ${prefix}${columnField}`);
+                  styleElement.remove();
+                }
+              });
+            }
           }
 
           // Force a refresh just for this column
@@ -2277,14 +2353,68 @@ export const useGridStore = create<GridStore>()(
 
               if (!columnSettings) return;
 
-              // Collect header styles
-              if (columnSettings.header && columnSettings.header.applyStyles === true) {
-                pendingHeaderStyles[columnField] = JSON.parse(JSON.stringify(columnSettings.header));
+              // Collect header styles - check individual toggles or legacy global toggle
+              if (columnSettings.header && (
+                  columnSettings.header.applyStyles === true || 
+                  columnSettings.header.applyTextColor === true || 
+                  columnSettings.header.applyBackgroundColor === true || 
+                  columnSettings.header.applyBorder === true
+                )) {
+                
+                // Create a copy of the styles with only enabled properties
+                const headerStyles = { ...columnSettings.header };
+                
+                // Apply only enabled text color
+                if (!headerStyles.applyTextColor) {
+                  headerStyles.textColor = undefined;
+                }
+                
+                // Apply only enabled background color
+                if (!headerStyles.applyBackgroundColor) {
+                  headerStyles.backgroundColor = undefined;
+                }
+                
+                // Apply only enabled border styles
+                if (!headerStyles.applyBorder) {
+                  headerStyles.borderStyle = undefined;
+                  headerStyles.borderWidth = undefined;
+                  headerStyles.borderColor = undefined;
+                  headerStyles.borderSides = undefined;
+                }
+                
+                pendingHeaderStyles[columnField] = JSON.parse(JSON.stringify(headerStyles));
               }
 
-              // Collect cell styles
-              if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
-                pendingCellStyles[columnField] = JSON.parse(JSON.stringify(columnSettings.cell));
+              // Collect cell styles - check individual toggles or legacy global toggle
+              if (columnSettings.cell && (
+                  columnSettings.cell.applyStyles === true || 
+                  columnSettings.cell.applyTextColor === true || 
+                  columnSettings.cell.applyBackgroundColor === true || 
+                  columnSettings.cell.applyBorder === true
+                )) {
+                
+                // Create a copy of the styles with only enabled properties
+                const cellStyles = { ...columnSettings.cell };
+                
+                // Apply only enabled text color
+                if (!cellStyles.applyTextColor) {
+                  cellStyles.textColor = undefined;
+                }
+                
+                // Apply only enabled background color
+                if (!cellStyles.applyBackgroundColor) {
+                  cellStyles.backgroundColor = undefined;
+                }
+                
+                // Apply only enabled border styles
+                if (!cellStyles.applyBorder) {
+                  cellStyles.borderStyle = undefined;
+                  cellStyles.borderWidth = undefined;
+                  cellStyles.borderColor = undefined;
+                  cellStyles.borderSides = undefined;
+                }
+                
+                pendingCellStyles[columnField] = JSON.parse(JSON.stringify(cellStyles));
               }
             } catch (error) {
               console.error(`Error collecting styles for column ${columnField}:`, error);
@@ -2315,15 +2445,17 @@ export const useGridStore = create<GridStore>()(
             const styles = pendingHeaderStyles[columnField];
             if (!styles) return;
 
-            // Convert styles object to CSS
+            // Convert styles object to CSS - only include defined properties
             let columnStyle = '';
             if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
             if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
             if (styles.bold) columnStyle += 'font-weight: bold; ';
             if (styles.italic) columnStyle += 'font-style: italic; ';
             if (styles.underline) columnStyle += 'text-decoration: underline; ';
-            if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
-            if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
+            // Only include text color if explicitly defined
+            if (styles.textColor !== undefined) columnStyle += `color: ${styles.textColor}; `;
+            // Only include background color if explicitly defined
+            if (styles.backgroundColor !== undefined) columnStyle += `background-color: ${styles.backgroundColor}; `;
             if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
 
             if (columnStyle) {
@@ -2354,6 +2486,19 @@ export const useGridStore = create<GridStore>()(
               allHeaderStyles += `
                 .ag-header-cell[col-id="${columnField}"],
                 .ag-header-cell.custom-header-${columnField} {
+                  ${borderProperty}: ${borderStyle} !important;
+                }
+              `;
+            }
+            
+            // Add border styles if specified
+            if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+              const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
+              const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
+
+              allCellStyles += `
+                .ag-cell[col-id="${columnField}"],
+                .ag-cell.custom-cell-${columnField} {
                   ${borderProperty}: ${borderStyle} !important;
                 }
               `;

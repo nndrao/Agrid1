@@ -30,7 +30,10 @@ export interface ColumnSettingsState {
 
   // Header styling
   header: {
-    applyStyles: boolean; // Flag to enable/disable header styling
+    applyStyles: boolean; // Flag to enable/disable header styling (deprecated, kept for backward compatibility)
+    applyTextColor?: boolean; // Flag to apply text color
+    applyBackgroundColor?: boolean; // Flag to apply background color
+    applyBorder?: boolean; // Flag to apply border styles
     fontFamily: string;
     fontSize: string;
     fontWeight: string;
@@ -48,7 +51,10 @@ export interface ColumnSettingsState {
 
   // Cell styling
   cell: {
-    applyStyles: boolean; // Flag to enable/disable cell styling
+    applyStyles: boolean; // Flag to enable/disable cell styling (deprecated, kept for backward compatibility)
+    applyTextColor?: boolean; // Flag to apply text color
+    applyBackgroundColor?: boolean; // Flag to apply background color
+    applyBorder?: boolean; // Flag to apply border styles
     fontFamily: string;
     fontSize: string;
     fontWeight: string;
@@ -137,6 +143,9 @@ export const useColumnSettings = (initialColumn: string) => {
       },
       header: {
         applyStyles: false, // Default to not applying styles
+        applyTextColor: false,
+        applyBackgroundColor: false,
+        applyBorder: false,
         fontFamily: 'Arial',
         fontSize: '14px',
         fontWeight: 'Normal',
@@ -153,6 +162,9 @@ export const useColumnSettings = (initialColumn: string) => {
       },
       cell: {
         applyStyles: false, // Default to not applying styles
+        applyTextColor: false,
+        applyBackgroundColor: false,
+        applyBorder: false,
         fontFamily: 'Arial',
         fontSize: '14px',
         fontWeight: 'Normal',

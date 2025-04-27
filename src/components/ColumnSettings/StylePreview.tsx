@@ -10,13 +10,13 @@ interface StylePreviewProps {
     bold?: boolean;
     italic?: boolean;
     underline?: boolean;
-    textColor?: string;
-    backgroundColor?: string;
+    textColor?: string | undefined;
+    backgroundColor?: string | undefined;
     alignH?: string;
-    borderStyle?: string;
-    borderWidth?: number;
-    borderColor?: string;
-    borderSides?: string;
+    borderStyle?: string | undefined;
+    borderWidth?: number | undefined;
+    borderColor?: string | undefined;
+    borderSides?: string | undefined;
   };
 }
 
@@ -28,12 +28,19 @@ export const StylePreview: React.FC<StylePreviewProps> = ({ label, value, styles
     fontWeight: styles.bold ? 'bold' : styles.fontWeight || 'normal',
     fontStyle: styles.italic ? 'italic' : 'normal',
     textDecoration: styles.underline ? 'underline' : 'none',
-    color: styles.textColor || 'inherit',
-    backgroundColor: styles.backgroundColor || 'inherit',
     width: '100%',
     justifyContent: 'flex-start',
-    borderRadius: '0px',
+    borderRadius: '0px', // Explicitly set border radius to 0
   };
+
+  // Only apply color styles if explicitly defined (not undefined)
+  if (styles.textColor !== undefined) {
+    previewStyle.color = styles.textColor;
+  }
+  
+  if (styles.backgroundColor !== undefined) {
+    previewStyle.backgroundColor = styles.backgroundColor;
+  }
 
   // Map alignH values to CSS text-align and justify-content values
   if (styles.alignH) {
@@ -49,10 +56,17 @@ export const StylePreview: React.FC<StylePreviewProps> = ({ label, value, styles
     }
   }
 
-  // Add border styles
-  if (styles.borderStyle && styles.borderStyle !== 'None' && styles.borderWidth && styles.borderWidth > 0) {
+  // Only apply border styles if all required properties are defined
+  if (
+    styles.borderStyle !== undefined && 
+    styles.borderStyle !== 'None' && 
+    styles.borderWidth !== undefined && 
+    styles.borderWidth > 0 &&
+    styles.borderColor !== undefined &&
+    styles.borderSides !== undefined
+  ) {
     const width = `${styles.borderWidth}px`;
-    const color = styles.borderColor || '#000000';
+    const color = styles.borderColor;
     const style = styles.borderStyle === 'Solid' ? 'solid' : 
                   styles.borderStyle === 'Dashed' ? 'dashed' : 
                   styles.borderStyle === 'Dotted' ? 'dotted' : 'solid';
@@ -76,6 +90,7 @@ export const StylePreview: React.FC<StylePreviewProps> = ({ label, value, styles
     }
   }
 
+  // Use theme-based styling for the preview container
   return (
     <div className="mb-3">
       <div 

@@ -16,6 +16,41 @@ interface HeaderTabProps {
   onUpdate: (updates: Partial<ColumnSettingsState['header']>) => void;
 }
 
+// New component for form field with enable checkbox
+const FormFieldWithToggle = ({ 
+  label, 
+  htmlFor, 
+  enabled,
+  onToggle,
+  children 
+}: { 
+  label: string, 
+  htmlFor: string, 
+  enabled: boolean,
+  onToggle: (enabled: boolean) => void,
+  children: React.ReactNode 
+}) => (
+  <div className="flex flex-col space-y-1">
+    <div className="flex items-center justify-between">
+      <Label htmlFor={htmlFor} className="text-[13px] font-medium">
+        {label}
+      </Label>
+      <div className="flex items-center">
+        <Label htmlFor={`${htmlFor}-toggle`} className="text-[11px] mr-1 text-muted-foreground">
+          Apply
+        </Label>
+        <Checkbox 
+          id={`${htmlFor}-toggle`}
+          checked={enabled}
+          onCheckedChange={onToggle}
+          className="h-3.5 w-3.5"
+        />
+      </div>
+    </div>
+    {children}
+  </div>
+);
+
 export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
   console.log('HeaderTab render with settings:', settings);
 
@@ -25,20 +60,62 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
     onUpdate(updates);
   };
 
+  // Define style enablers (moved from global to individual properties)
+  const applyTextColor = settings.applyTextColor ?? false;
+  const applyBackgroundColor = settings.applyBackgroundColor ?? false;
+  const applyBorder = settings.applyBorder ?? false;
+
   // Memoize preview styles to prevent unnecessary re-renders but update when settings change
   const previewStyles = useMemo(() => {
-    return settings.applyStyles ? settings : undefined;
+    const styleOverrides: Partial<ColumnSettingsState['header']> = {
+      fontFamily: settings.fontFamily,
+      fontSize: settings.fontSize,
+      fontWeight: settings.fontWeight,
+      bold: settings.bold,
+      italic: settings.italic,
+      underline: settings.underline,
+      alignH: settings.alignH,
+    };
+    
+    // Only include properties that are enabled, otherwise set to undefined to use theme defaults
+    if (applyTextColor) {
+      styleOverrides.textColor = settings.textColor;
+    } else {
+      styleOverrides.textColor = undefined;
+    }
+    
+    if (applyBackgroundColor) {
+      styleOverrides.backgroundColor = settings.backgroundColor;
+    } else {
+      styleOverrides.backgroundColor = undefined;
+    }
+    
+    if (applyBorder) {
+      styleOverrides.borderStyle = settings.borderStyle;
+      styleOverrides.borderWidth = settings.borderWidth;
+      styleOverrides.borderColor = settings.borderColor;
+      styleOverrides.borderSides = settings.borderSides;
+    } else {
+      styleOverrides.borderStyle = undefined;
+      styleOverrides.borderWidth = undefined;
+      styleOverrides.borderColor = undefined;
+      styleOverrides.borderSides = undefined;
+    }
+    
+    return styleOverrides;
   }, [
-    settings.applyStyles,
     settings.fontFamily,
     settings.fontSize,
     settings.fontWeight,
     settings.bold,
     settings.italic,
     settings.underline,
-    settings.textColor,
-    settings.backgroundColor,
     settings.alignH,
+    applyTextColor,
+    settings.textColor,
+    applyBackgroundColor,
+    settings.backgroundColor,
+    applyBorder,
     settings.borderStyle,
     settings.borderWidth,
     settings.borderColor,
@@ -47,27 +124,8 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
 
   return (
     <div className="bg-card border border-border/80 shadow-none rounded-lg mb-3 p-4">
-      {/* Top section with checkbox and preview */}
-      <div className="flex flex-col space-y-2 mb-3">
-        {/* Apply Styles Checkbox */}
-        <div className="flex items-center space-x-2 py-1 px-2 bg-muted/30 rounded">
-          <Checkbox
-            id="apply-header-styles"
-            checked={settings.applyStyles}
-            onCheckedChange={(checked) => {
-              console.log('Apply styles changed to:', checked);
-              // Pass the value as a direct boolean
-              const applyStyles = checked === true;
-              console.log(`Setting header.applyStyles to ${applyStyles} (${typeof applyStyles})`);
-              handleUpdate({ applyStyles });
-            }}
-          />
-          <Label htmlFor="apply-header-styles" className="text-sm font-medium cursor-pointer">
-            Apply these styles to the grid header
-          </Label>
-        </div>
-        
-        {/* Preview with dynamic styles */}
+      {/* Preview box at the top */}
+      <div className="mb-4">
         <StylePreview 
           label="" 
           value="Header Preview" 
@@ -133,7 +191,12 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
       {/* Colors */}
       <StyleSection title="Colors">
         <div className="grid grid-cols-2 gap-2">
-          <FormField label="Text Color" htmlFor="header-text-color">
+          <FormFieldWithToggle 
+            label="Text Color" 
+            htmlFor="header-text-color"
+            enabled={applyTextColor}
+            onToggle={checked => handleUpdate({ applyTextColor: !!checked })}
+          >
             <Input
               id="header-text-color"
               type="color"
@@ -141,9 +204,14 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
               onChange={e => handleUpdate({ textColor: e.target.value })}
               className="h-7 w-full text-[13px] bg-card border border-border/80 rounded"
             />
-          </FormField>
+          </FormFieldWithToggle>
 
-          <FormField label="Background" htmlFor="header-bg-color">
+          <FormFieldWithToggle 
+            label="Background" 
+            htmlFor="header-bg-color"
+            enabled={applyBackgroundColor}
+            onToggle={checked => handleUpdate({ applyBackgroundColor: !!checked })}
+          >
             <Input
               id="header-bg-color"
               type="color"
@@ -151,7 +219,7 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
               onChange={e => handleUpdate({ backgroundColor: e.target.value })}
               className="h-7 w-full text-[13px] bg-card border border-border/80 rounded"
             />
-          </FormField>
+          </FormFieldWithToggle>
         </div>
       </StyleSection>
 
@@ -163,11 +231,30 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
         />
       </StyleSection>
 
-      {/* Borders */}
+      {/* Borders with toggle */}
       <StyleSection title="Borders">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] font-medium">Border Properties</span>
+          <div className="flex items-center">
+            <Label htmlFor="header-border-toggle" className="text-[11px] mr-1 text-muted-foreground">
+              Apply Borders
+            </Label>
+            <Checkbox 
+              id="header-border-toggle"
+              checked={applyBorder}
+              onCheckedChange={checked => handleUpdate({ applyBorder: !!checked })}
+              className="h-3.5 w-3.5"
+            />
+          </div>
+        </div>
+        
         <div className="grid grid-cols-2 gap-2">
           <FormField label="Style" htmlFor="header-border-style">
-            <Select value={settings.borderStyle} onValueChange={value => handleUpdate({ borderStyle: value })}>
+            <Select 
+              value={settings.borderStyle} 
+              onValueChange={value => handleUpdate({ borderStyle: value })}
+              disabled={!applyBorder}
+            >
               <SelectTrigger id="header-border-style" className="h-7 text-[13px] w-full bg-card border border-border/80 rounded">
                 <SelectValue />
               </SelectTrigger>
@@ -188,6 +275,7 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
               value={[settings.borderWidth]}
               onValueChange={([v]) => handleUpdate({ borderWidth: v })}
               className="h-7 w-full"
+              disabled={!applyBorder}
             />
           </FormField>
 
@@ -198,11 +286,16 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
               value={settings.borderColor}
               onChange={e => handleUpdate({ borderColor: e.target.value })}
               className="h-7 w-full text-[13px] bg-card border border-border/80 rounded"
+              disabled={!applyBorder}
             />
           </FormField>
 
           <FormField label="Sides" htmlFor="header-border-sides">
-            <Select value={settings.borderSides} onValueChange={value => handleUpdate({ borderSides: value })}>
+            <Select 
+              value={settings.borderSides} 
+              onValueChange={value => handleUpdate({ borderSides: value })}
+              disabled={!applyBorder}
+            >
               <SelectTrigger id="header-border-sides" className="h-7 text-[13px] w-full bg-card border border-border/80 rounded">
                 <SelectValue />
               </SelectTrigger>
