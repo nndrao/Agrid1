@@ -173,7 +173,7 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
         try {
           const activeProfile = getActiveProfile();
           if (activeProfile) {
-            console.log('Forcibly applying column profiles for', activeProfile.name, 'during initialization');
+            // Force apply profiles during initialization
             // Apply all column profiles stored in the active profile
             const columns = api.getColumns();
             if (columns && columns.length > 0) {
@@ -188,7 +188,6 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
                   }
                 }
               });
-              console.log(`Applied profile settings to ${appliedCount} columns during initialization`);
             }
           }
         } catch (error) {

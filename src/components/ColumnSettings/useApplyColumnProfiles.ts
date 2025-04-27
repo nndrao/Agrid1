@@ -23,7 +23,7 @@ export const useApplyColumnProfiles = (gridApi: GridApi | null) => {
       return;
     }
     
-    console.log('Applying column profiles for active profile:', activeProfile.name);
+    // Apply profiles for the active profile
     
     // The profile is already loaded in the store, so we just need to apply it
     // This triggers the real implementation in the store
@@ -48,7 +48,7 @@ export const useApplyColumnProfiles = (gridApi: GridApi | null) => {
         }
       });
       
-      console.log(`Successfully applied profile settings to ${appliedCount} columns`);
+      // Successfully applied profile settings
       return true;
     } catch (error) {
       console.error('Error applying column profiles:', error);
@@ -69,7 +69,7 @@ export const useApplyColumnProfiles = (gridApi: GridApi | null) => {
       return false;
     }
     
-    console.log('Applying all column profiles for profile:', activeProfile.name);
+    // Apply all column profiles for the active profile
     
     try {
       // Get all columns from the grid
@@ -92,7 +92,7 @@ export const useApplyColumnProfiles = (gridApi: GridApi | null) => {
         }
       });
       
-      console.log(`Successfully applied all profile settings to ${appliedCount} columns`);
+      // Successfully applied all profile settings
       return true;
     } catch (error) {
       console.error('Error applying all column profiles:', error);
