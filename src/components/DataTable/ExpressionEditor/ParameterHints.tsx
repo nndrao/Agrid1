@@ -1,5 +1,4 @@
 import React from 'react';
-import { FunctionDefinition } from './types';
 import { getFunctionByName } from './functions';
 import { cn } from '@/lib/utils';
 

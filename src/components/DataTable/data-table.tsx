@@ -7,7 +7,7 @@ import { GridReadyEvent } from 'ag-grid-community';
 import { DataTableToolbar } from './Toolbar/DataTableToolbar';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
-import { useApplyColumnProfiles } from '../ColumnSettings/useApplyColumnProfiles';
+import { useApplyColumnProfiles } from '@/components/ColumnSettings/useApplyColumnProfiles';
 
 
 import { useGridStore } from '@/store/gridStore';
@@ -29,7 +29,10 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     gridApi,
     setGridApi,
     initializeStore,
-    applySettingsToGrid
+    applySettingsToGrid,
+    getActiveProfile,
+    getColumnSettings,
+    applyColumnSettings
   } = useGridStore();
 
   // Local state
@@ -41,7 +44,6 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     createGridTheme(settings?.font?.value || defaultFontValue)
   );
 
-
   const gridRef = useRef<AgGridReact>(null);
 
   // Column definitions
@@ -49,56 +51,65 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     return generateColumnDefs(data);
   }, [data]);
 
+  // Memoize the theme mode to avoid unnecessary re-renders
+  const isDarkMode = useMemo(() => currentTheme === 'dark', [currentTheme]);
+
   // Initialize the grid theme when the theme or font changes
   useEffect(() => {
-    setDarkMode(currentTheme === 'dark');
-    setGridTheme(createGridTheme(settings?.font?.value || defaultFontValue));
-  }, [currentTheme, settings?.font, defaultFontValue]);
+    // Set the theme mode on the body element
+    document.body.dataset.agThemeMode = isDarkMode ? 'dark' : 'light';
+
+    // Create a new grid theme with the current font
+    const fontValue = settings?.font?.value || defaultFontValue;
+    setGridTheme(createGridTheme(fontValue));
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Grid theme updated:', { isDarkMode, fontValue });
+    }
+  }, [isDarkMode, settings?.font?.value, defaultFontValue]);
 
   // Initialize the store once on component mount
   useEffect(() => {
     initializeStore();
   }, [initializeStore]);
 
-  // Apply settings only when specific properties change that require grid refresh
-  // We exclude fontSize and density as they're handled via CSS directly
-  const { font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState } = settings || {};
-
-  // Get applyAllProfiles function from hook - but don't wrap in useMemo to avoid React hook order issues
+  // Get applyAllProfiles function from hook
   const { applyAllProfiles } = useApplyColumnProfiles(gridApi);
-  
-  // Only apply settings when grid API and essential properties change
-  const applySettings = useCallback(() => {
-    if (gridApi && gridApi.getColumn && typeof gridApi.getColumn === 'function') {
-      console.log('Applying settings due to grid-related property change');
-      
-      // Apply settings to grid
-      applySettingsToGrid();
 
-      // Apply all saved column profiles after a short delay
-      const timeoutId = setTimeout(() => {
-        console.log('Applying column profiles after settings change');
-        if (gridApi && gridApi.getColumn) {
-          applyAllProfiles();
-        }
-      }, 300);
-      
-      return () => clearTimeout(timeoutId);
+  // Memoize the settings update function to reduce rerenders
+  const applyGridSettings = useCallback(() => {
+    if (!gridApi || typeof gridApi.getColumn !== 'function') {
+      return;
     }
-  }, [gridApi, applySettingsToGrid, applyAllProfiles]);
-  
-  // Use effect to call the callback when settings change
-  useEffect(() => {
-    return applySettings();
-  }, [
-    // Only include essential dependencies that should trigger a refresh
-    font, columnsState, filterState, sortState, rowGroupState, pivotState, chartState,
-    applySettings
-  ]);
 
-  function setDarkMode(enabled: boolean) {
-    document.body.dataset.agThemeMode = enabled ? 'dark' : 'light';
-  }
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Applying settings and profiles in batch');
+    }
+
+    // Apply settings once with all changes batched
+    applySettingsToGrid();
+
+    // Apply profiles without additional timeouts
+    applyAllProfiles();
+  }, [gridApi, applySettingsToGrid, applyAllProfiles]);
+
+  // Only run effect when active profile changes (not every settings mutation)
+  const activeProfileId = useGridStore(state => state.activeProfileId);
+  useEffect(() => {
+    if (!gridApi) return;
+    // When active profile changes, apply its settings to the grid
+    if (!settings) return;
+    // (You may want to debounce if needed)
+    applyGridSettings();
+  }, [gridApi, activeProfileId]);
+
+  // Apply font family CSS variable directly without triggering grid refresh
+  useEffect(() => {
+    if (settings?.font?.value) {
+      // Only update the font family setting - less expensive operation
+      document.documentElement.style.setProperty('--ag-font-family', settings.font.value);
+    }
+  }, [settings?.font?.value]);
 
   // Define default column properties - AG Grid 33+ syntax
   const defaultColDef = useMemo(() => ({
@@ -125,7 +136,75 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     }
   }), []);
 
-  // Handle grid ready event - AG Grid 33+ approach
+  // Batch all grid initialization steps in a single function
+  const setupGridApi = useCallback((api: any) => {
+    if (!api) return;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Setting up grid API with batched operations');
+    }
+
+    // Store reference in window for emergency access only in development
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      (window as any).__gridApi = api;
+      (window as any).__hasGridApi = true;
+      (window as any).__refreshGridApi = () => {
+        setGridApi(api);
+        return 'Grid API refreshed';
+      };
+    }
+
+    // Set API in store - this operation is synchronous
+    setGridApi(api);
+
+    // Apply settings with a slight delay to ensure grid is fully initialized
+    if (api && typeof api.getColumn === 'function') {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Applying initial settings to grid');
+      }
+
+      // Use a short timeout to ensure the grid is fully rendered
+      setTimeout(() => {
+        // Apply settings from current profile
+        applyGridSettings();
+        
+        // Force apply column profiles specifically for reload case
+        // This is critical to ensure profile settings are applied on refresh
+        try {
+          const activeProfile = getActiveProfile();
+          if (activeProfile) {
+            console.log('Forcibly applying column profiles for', activeProfile.name, 'during initialization');
+            // Apply all column profiles stored in the active profile
+            const columns = api.getColumns();
+            if (columns && columns.length > 0) {
+              let appliedCount = 0;
+              columns.forEach(column => {
+                const colId = column.getColId();
+                if (colId) {
+                  const settings = getColumnSettings(colId);
+                  if (settings) {
+                    applyColumnSettings(colId);
+                    appliedCount++;
+                  }
+                }
+              });
+              console.log(`Applied profile settings to ${appliedCount} columns during initialization`);
+            }
+          }
+        } catch (error) {
+          console.error('Error applying column profiles during initialization:', error);
+        }
+
+        // Set initial focus to first cell
+        const columns = api.getColumns();
+        if (columns && columns.length > 0) {
+          api.setFocusedCell(0, columns[0].getColId());
+        }
+      }, 50);
+    }
+  }, [setGridApi, applyGridSettings, getActiveProfile, getColumnSettings, applyColumnSettings]);
+
+  // Handle grid ready event - AG Grid 33+ approach with single initialization
   const onGridReady = useCallback((params: GridReadyEvent) => {
     if (!params || !params.api) {
       console.warn('Grid API not available in onGridReady');
@@ -133,86 +212,24 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     }
 
     try {
-      console.log('Grid API available in onGridReady');
-      
-      // Keep a reference in window for emergency access - do this FIRST
-      if (typeof window !== 'undefined') {
-        console.log('Storing grid API in window.__gridApi for emergency access');
-        (window as any).__gridApi = params.api;
-        
-        // Also store in localStorage for persistence across sessions
-        (window as any).__hasGridApi = true;
-        
-        // Create a function to refresh the grid API (for emergency recovery)
-        (window as any).__refreshGridApi = () => {
-          console.log('Emergency refreshing grid API reference');
-          setGridApi(params.api);
-          return 'Grid API refreshed successfully';
-        };
-      }
-      
-      // Set up grid API reference in the store
-      console.log('Setting grid API reference in store - this should be saved');
-      setGridApi(params.api);
-      
-      // Double-check after a short delay that the gridApi was properly saved
-      setTimeout(() => {
-        const savedApi = useGridStore.getState().gridApi;
-        if (!savedApi) {
-          console.warn('Grid API not properly saved in store, attempting emergency save');
-          setGridApi(params.api);
-        } else {
-          console.log('Grid API successfully saved in store');
-        }
-      }, 100);
-
-      // Apply current settings to grid - using a longer delay
-      // to ensure grid API is fully initialized and registered in store
-      setTimeout(() => {
-        console.log('Applying grid settings after initialization');
-        applySettingsToGrid();
-
-        // Apply all saved column profiles after a short delay
-        // This allows the grid API to be properly registered before applying profiles
-        setTimeout(() => {
-          console.log('Now applying column profiles');
-          if (params.api) {
-            // Use the window API reference to ensure we have the latest
-            if (typeof window !== 'undefined') {
-              console.log('Setting latest API reference before applying profiles');
-              (window as any).__gridApi = params.api;
-            }
-            
-            // Refresh grid API in store
-            setGridApi(params.api);
-            
-            // Now apply profiles
-            applyAllProfiles();
-            
-            // Force a column refresh to ensure styles are applied
-            setTimeout(() => {
-              if (params.api && typeof params.api.refreshCells === 'function') {
-                console.log('Performing final cell refresh after applying profiles');
-                params.api.refreshCells({ force: true });
-              }
-            }, 300);
-          }
-        }, 500);
-      }, 200);
-
-      // Set initial focus to first cell
-      setTimeout(() => {
-        if (params.api) {
-          const columns = params.api.getColumns();
-          if (columns && columns.length > 0) {
-            params.api.setFocusedCell(0, columns[0].getColId());
-          }
-        }
-      }, 300);
+      // Initialize grid API once without multiple timeouts
+      setupGridApi(params.api);
     } catch (error) {
       console.error('Error in onGridReady:', error);
     }
-  }, [setGridApi, applySettingsToGrid, applyAllProfiles]);
+  }, [setupGridApi]);
+
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up any references to the grid API
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        delete (window as any).__gridApi;
+        delete (window as any).__hasGridApi;
+        delete (window as any).__refreshGridApi;
+      }
+    };
+  }, []);
 
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">

@@ -4,14 +4,12 @@ import { cn } from '@/lib/utils';
 interface ExpressionEditorProps {
   value: string;
   onChange: (value: string) => void;
-  columnDefs: any[];
   className?: string;
 }
 
 export const ExpressionEditor = forwardRef<HTMLTextAreaElement, ExpressionEditorProps>(({
   value,
   onChange,
-  columnDefs,
   className
 }, ref) => {
   const localRef = useRef<HTMLTextAreaElement>(null);
@@ -39,12 +37,20 @@ export const ExpressionEditor = forwardRef<HTMLTextAreaElement, ExpressionEditor
       const newValue = value.substring(0, start) + '  ' + value.substring(end);
       onChange(newValue);
       
-      // Move cursor after the inserted tab
-      setTimeout(() => {
-        if (localRef.current) {
-          localRef.current.selectionStart = localRef.current.selectionEnd = start + 2;
+      // Set cursor position directly - no need for setTimeout
+      // React will handle this during the next render cycle
+      if (localRef.current) {
+        try {
+          requestAnimationFrame(() => {
+            if (localRef.current) {
+              localRef.current.selectionStart = localRef.current.selectionEnd = start + 2;
+              localRef.current.focus();
+            }
+          });
+        } catch (error) {
+          console.warn('Error setting cursor position:', error);
         }
-      }, 0);
+      }
     }
   };
 

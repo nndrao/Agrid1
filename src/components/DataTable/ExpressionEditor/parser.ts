@@ -1,4 +1,3 @@
-import { FunctionDefinition } from './types';
 import { getFunctionByName } from './functions';
 
 export type TokenType = 
