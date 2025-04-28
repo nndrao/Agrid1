@@ -70,6 +70,17 @@ export interface ColumnSettingsState {
     borderSides: string;
   };
 
+  // Formatter settings
+  formatter: {
+    formatterType: string; // None, Number, Date, Currency, Percent, Custom
+    decimalPlaces: number;
+    useThousandsSeparator: boolean;
+    formatPreset: string;
+    currencySymbol: string;
+    symbolPosition: string; // 'before' or 'after'
+    customFormat: string;
+  };
+
   // Additional settings can be added for other tabs
 }
 
@@ -121,7 +132,8 @@ export const useColumnSettings = (initialColumn: string) => {
         return {
           general: { ...profile.general },
           header: { ...profile.header },
-          cell: { ...profile.cell }
+          cell: { ...profile.cell },
+          formatter: { ...profile.formatter }
         };
       }
     } catch (error) {
@@ -178,6 +190,15 @@ export const useColumnSettings = (initialColumn: string) => {
         borderWidth: 1,
         borderColor: '#000000',
         borderSides: 'All',
+      },
+      formatter: {
+        formatterType: 'None',
+        decimalPlaces: 2,
+        useThousandsSeparator: true,
+        formatPreset: '',
+        currencySymbol: '$',
+        symbolPosition: 'before',
+        customFormat: ''
       }
     };
 
@@ -330,6 +351,11 @@ export const useColumnSettings = (initialColumn: string) => {
     updateSection('cell', updates);
   }, [updateSection]);
 
+  // Update formatter settings
+  const updateFormatter = useCallback((updates: Partial<ColumnSettingsState['formatter']>) => {
+    updateSection('formatter', updates);
+  }, [updateSection]);
+
   // Reset state for a new column - completely rewritten to avoid circular dependencies
   const resetForColumn = useCallback((columnName: string) => {
     // Skip if column name is empty
@@ -418,6 +444,15 @@ export const useColumnSettings = (initialColumn: string) => {
           borderWidth: 1,
           borderColor: '#000000',
           borderSides: 'All'
+        },
+        formatter: {
+          formatterType: 'None',
+          decimalPlaces: 2,
+          useThousandsSeparator: true,
+          formatPreset: '',
+          currencySymbol: '$',
+          symbolPosition: 'before',
+          customFormat: ''
         }
       });
     } finally {
@@ -489,7 +524,8 @@ export const useColumnSettings = (initialColumn: string) => {
       const stateCopy = {
         general: {...state.general},
         header: {...state.header},
-        cell: {...state.cell}
+        cell: {...state.cell},
+        formatter: {...state.formatter}
       };
 
       // If this is a column profile, try to get the current width from the grid
@@ -563,10 +599,17 @@ export const useColumnSettings = (initialColumn: string) => {
 
       // Create a safe copy to avoid reference issues
       const profile = profiles[profileName];
+      
+      // Make sure we have the default structure with all expected properties
+      const defaultSettings = getInitialState('dummy');
+      
+      // Create a complete profile with defaults for any missing sections
       const profileCopy = {
-        general: {...profile.general},
-        header: {...profile.header},
-        cell: {...profile.cell}
+        general: {...defaultSettings.general, ...profile.general},
+        header: {...defaultSettings.header, ...profile.header},
+        cell: {...defaultSettings.cell, ...profile.cell},
+        // Ensure formatter exists even for older profiles
+        formatter: {...defaultSettings.formatter, ...(profile.formatter || {})}
       };
 
       // Set internal update flag to prevent circular updates
@@ -637,6 +680,7 @@ export const useColumnSettings = (initialColumn: string) => {
     updateGeneral,
     updateHeader,
     updateCell,
+    updateFormatter,
     resetForColumn,
     applySettingsToGrid,
     saveProfile,

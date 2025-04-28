@@ -15,6 +15,7 @@ import { HeaderTab } from './tabs/HeaderTab';
 import { CellTab } from './tabs/CellTab';
 import { FilterTab } from './tabs/FilterTab';
 import { EditorsTab } from './tabs/EditorsTab';
+import { FormatterTab } from './tabs/FormatterTab';
 
 // Import grid store instead of local state management
 import { useGridStore } from '@/store/gridStore';
@@ -94,6 +95,15 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
       borderWidth: 1,
       borderColor: '#000000',
       borderSides: 'All',
+    },
+    formatter: {
+      formatterType: 'None',
+      decimalPlaces: 2,
+      useThousandsSeparator: true,
+      formatPreset: '',
+      currencySymbol: '$',
+      symbolPosition: 'before',
+      customFormat: ''
     }
   });
 
@@ -171,14 +181,27 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
   };
 
   const updateCell = (updates: Partial<ColumnSettingsState['cell']>) => {
-    if (!state) return;
-    setState({
-      ...state,
-      cell: {
-        ...state.cell,
-        ...updates
-      }
-    });
+    if (state) {
+      setState(prev => ({
+        ...prev!,
+        cell: {
+          ...prev!.cell,
+          ...updates
+        }
+      }));
+    }
+  };
+
+  const updateFormatter = (updates: Partial<ColumnSettingsState['formatter']>) => {
+    if (state) {
+      setState(prev => ({
+        ...prev!,
+        formatter: {
+          ...prev!.formatter,
+          ...updates
+        }
+      }));
+    }
   };
 
   // Function to check if state has changed from the original settings
@@ -338,6 +361,7 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
                 <TabsTrigger value="general" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">General</TabsTrigger>
                 <TabsTrigger value="header" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Header</TabsTrigger>
                 <TabsTrigger value="cell" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Cell</TabsTrigger>
+                <TabsTrigger value="formatter" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Formatter</TabsTrigger>
                 <TabsTrigger value="filter" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Filter</TabsTrigger>
                 <TabsTrigger value="editors" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Editors</TabsTrigger>
               </TabsList>
@@ -364,10 +388,16 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
                 />
               </TabsContent>
               
+              <TabsContent value="formatter" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
+                <FormatterTab 
+                  settings={state.formatter}
+                  onUpdate={updateFormatter}
+                />
+              </TabsContent>
+              
               <TabsContent value="filter" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
                 <FilterTab />
               </TabsContent>
-              
               
               <TabsContent value="editors" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
                 <EditorsTab />

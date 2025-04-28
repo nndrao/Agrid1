@@ -165,7 +165,35 @@ interface GridStore {
   batchApplyHeaderStyles: (columnField: string, styles: any) => void;
   batchApplyCellStyles: (columnField: string, styles: any) => void;
   flushBatchedStyles: () => void;
+  removeCellStyles: (columnField: string) => void;
 }
+
+// Helper function to format dates according to a format string
+// Used by the formatter feature
+const formatDate = (date: Date, format: string): string => {
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  
+  // Month names for formatting
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  // Replace format patterns
+  return format
+    .replace('YYYY', year.toString())
+    .replace('MM', pad(month))
+    .replace('DD', pad(day))
+    .replace('HH', pad(hours))
+    .replace('mm', pad(minutes))
+    .replace('ss', pad(seconds))
+    .replace('MMM', monthNames[month - 1]);
+};
 
 // Create the store
 export const useGridStore = create<GridStore>()(
@@ -412,18 +440,18 @@ export const useGridStore = create<GridStore>()(
                       applyOrder: true
                     });
                     needsGridRefresh = true;
-                  } catch (e) {
-                    console.warn('Error applying column state:', e);
+                  } catch (error) {
+                    console.warn('Error applying column state:', error);
                   }
                 }
 
                 // Apply filter state if available
-                if (defaultSettings.filterState && typeof gridApi.setFilterModel === 'function') {
+                if (typeof gridApi.setFilterModel === 'function') {
                   try {
                     gridApi.setFilterModel(defaultSettings.filterState);
                     needsGridRefresh = true;
-                  } catch (e) {
-                    console.warn('Error applying filter state:', e);
+                  } catch (error) {
+                    console.warn('Error applying filter state:', error);
                   }
                 }
 
@@ -433,8 +461,8 @@ export const useGridStore = create<GridStore>()(
                   try {
                     gridApi.setSortModel(defaultSettings.sortState);
                     needsGridRefresh = true;
-                  } catch (e) {
-                    console.warn('Error applying sort state:', e);
+                  } catch (error) {
+                    console.warn('Error applying sort state:', error);
                   }
                 }
 
@@ -457,8 +485,8 @@ export const useGridStore = create<GridStore>()(
                     if (typeof gridApi.refreshCells === 'function') {
                       gridApi.refreshCells({ force: true });
                     }
-                  } catch (e) {
-                    console.warn('Error refreshing grid:', e);
+                  } catch (error) {
+                    console.warn('Error refreshing grid:', error);
                   }
                 }
               } catch (error) {
@@ -1293,12 +1321,15 @@ export const useGridStore = create<GridStore>()(
                 gridApi.applyColumnState({
                   state: formattedColumnState,
                   applyOrder: true,
-                  defaultState: { width: null } // Clear any default width
+                  defaultState: {
+                    // Reset all properties to defaults
+                    width: undefined,
+                    flex: undefined,
+                    pinned: null,
+                    sort: null,
+                    hide: false
+                  }
                 });
-
-                if (process.env.NODE_ENV === 'development') {
-                  console.log('Applied column state with saved widths during initialization');
-                }
                 needsRefresh = true;
               } catch (error) {
                 console.warn('Failed to apply column state:', error);
@@ -2038,14 +2069,18 @@ export const useGridStore = create<GridStore>()(
             // Handle column type with explicit case handling
             if (columnSettings.general.columnType) {
               switch (columnSettings.general.columnType) {
-                case 'Number':
+                case 'Number': {
+                  // Format as number
                   colDef.type = 'customNumeric';
                   colDef.filter = 'agNumberColumnFilter';
                   break;
-                case 'Date':
+                }
+                case 'Date': {
+                  // Format as date
                   colDef.type = 'customDate';
                   colDef.filter = 'agDateColumnFilter';
                   break;
+                }
                 case 'String':
                   colDef.type = undefined;
                   colDef.filter = 'agTextColumnFilter';
@@ -2140,8 +2175,6 @@ export const useGridStore = create<GridStore>()(
                 // Remove only our custom class
                 const classes = colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`);
                 colDef.headerClass = classes.length > 0 ? classes.join(' ') : undefined;
-              } else {
-                colDef.headerClass = undefined;
               }
   
               // Clear any existing header styles for this column
@@ -2203,18 +2236,118 @@ export const useGridStore = create<GridStore>()(
                 // Remove only our custom class
                 const classes = colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`);
                 colDef.cellClass = classes.length > 0 ? classes.join(' ') : undefined;
-              } else {
-                colDef.cellClass = undefined;
               }
-  
-              // Clear any existing cell styles for this column
-              ['cell-style-', 'direct-cell-style-', 'emergency-cell-style-'].forEach(prefix => {
-                const styleElement = document.getElementById(`${prefix}${columnField}`);
-                if (styleElement) {
-                  console.log(`Removing cell style element: ${prefix}${columnField}`);
-                  styleElement.remove();
+              
+              // Reset cell styles
+              get().removeCellStyles(columnField);
+            }
+          }
+
+          // Apply formatter settings
+          if (columnSettings.formatter) {
+            // Only apply formatter if type is not None
+            if (columnSettings.formatter.formatterType !== 'None') {
+              // Create valueFormatter function based on formatter type
+              colDef.valueFormatter = (params) => {
+                if (params.value === null || params.value === undefined) {
+                  return '';
                 }
-              });
+
+                try {
+                  const formatter = columnSettings.formatter;
+                  
+                  switch (formatter.formatterType) {
+                    case 'Number': {
+                      // Format as number
+                      const value = Number(params.value);
+                      if (isNaN(value)) return params.value;
+                      
+                      // Create number formatter options
+                      const options: Intl.NumberFormatOptions = {
+                        minimumFractionDigits: formatter.decimalPlaces || 0,
+                        maximumFractionDigits: formatter.decimalPlaces || 0,
+                        useGrouping: formatter.useThousandsSeparator
+                      };
+                      
+                      return new Intl.NumberFormat(undefined, options).format(value);
+                    }
+                    
+                    case 'Currency': {
+                      // Format as currency
+                      const value = Number(params.value);
+                      if (isNaN(value)) return params.value;
+                      
+                      // Create currency formatter options
+                      const options: Intl.NumberFormatOptions = {
+                        minimumFractionDigits: formatter.decimalPlaces || 2,
+                        maximumFractionDigits: formatter.decimalPlaces || 2,
+                        useGrouping: true
+                      };
+                      
+                      const formattedValue = new Intl.NumberFormat(undefined, options).format(value);
+                      
+                      // Apply currency symbol based on position
+                      return formatter.symbolPosition === 'before' 
+                        ? `${formatter.currencySymbol}${formattedValue}` 
+                        : `${formattedValue}${formatter.currencySymbol}`;
+                    }
+                    
+                    case 'Percent': {
+                      // Format as percentage
+                      const value = Number(params.value);
+                      if (isNaN(value)) return params.value;
+                      
+                      // Create percentage formatter options
+                      const options: Intl.NumberFormatOptions = {
+                        minimumFractionDigits: formatter.decimalPlaces || 0,
+                        maximumFractionDigits: formatter.decimalPlaces || 0,
+                        style: 'percent'
+                      };
+                      
+                      return new Intl.NumberFormat(undefined, options).format(value / 100);
+                    }
+                    
+                    case 'Date': {
+                      // Format as date
+                      let date: Date;
+                      
+                      // Try to parse the date value
+                      if (params.value instanceof Date) {
+                        date = params.value;
+                      } else if (typeof params.value === 'string' || typeof params.value === 'number') {
+                        date = new Date(params.value);
+                      } else {
+                        return params.value;
+                      }
+                      
+                      if (isNaN(date.getTime())) return params.value;
+                      
+                      // Get format from preset or use default
+                      const format = formatter.formatPreset || 'MM/DD/YYYY';
+                      
+                      // Apply date format
+                      return formatDate(date, format);
+                    }
+                    
+                    case 'Custom': {
+                      // For custom format, use a simple replacement approach
+                      // This could be expanded to a more complex formatting system in the future
+                      return formatter.customFormat ? 
+                        formatter.customFormat.replace('{value}', String(params.value)) : 
+                        params.value;
+                    }
+                    
+                    default:
+                      return params.value;
+                  }
+                } catch (error) {
+                  console.error('Error formatting cell value:', error);
+                  return params.value;
+                }
+              };
+            } else {
+              // If formatter type is None, remove valueFormatter
+              colDef.valueFormatter = undefined;
             }
           }
 
@@ -2479,7 +2612,10 @@ export const useGridStore = create<GridStore>()(
             }
 
             // Add border styles if specified
-            if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+            if (styles.borderStyle !== undefined && 
+                styles.borderWidth !== undefined && 
+                styles.borderColor !== undefined && 
+                styles.borderSides !== undefined) {
               const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
               const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
 
@@ -2490,9 +2626,12 @@ export const useGridStore = create<GridStore>()(
                 }
               `;
             }
-            
+
             // Add border styles if specified
-            if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+            if (styles.borderStyle !== undefined && 
+                styles.borderWidth !== undefined && 
+                styles.borderColor !== undefined && 
+                styles.borderSides !== undefined) {
               const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
               const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
 
@@ -2532,7 +2671,10 @@ export const useGridStore = create<GridStore>()(
             }
 
             // Add border styles if specified
-            if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+            if (styles.borderStyle !== undefined && 
+                styles.borderWidth !== undefined && 
+                styles.borderColor !== undefined && 
+                styles.borderSides !== undefined) {
               const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
               const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
 
@@ -2761,7 +2903,7 @@ export const useGridStore = create<GridStore>()(
         if (!gridApi) return null;
 
         try {
-          // Check if getSortModel exists, otherwise try getColumnState for sort info
+          // Check if getSortModel exists
           if (typeof gridApi.getSortModel === 'function') {
             return gridApi.getSortModel();
           } else if (typeof gridApi.getColumnState === 'function') {
@@ -2821,7 +2963,17 @@ export const useGridStore = create<GridStore>()(
           // Catch and silence the error about missing Charts module
           return null;
         }
-      }
+      },
+      removeCellStyles: (columnField) => {
+        // Clear any existing cell styles for this column
+        ['cell-style-', 'direct-cell-style-', 'emergency-cell-style-'].forEach(prefix => {
+          const styleElement = document.getElementById(`${prefix}${columnField}`);
+          if (styleElement) {
+            console.log(`Removing cell style element: ${prefix}${columnField}`);
+            styleElement.remove();
+          }
+        });
+      },
     }; // Close the return object
     },
     {

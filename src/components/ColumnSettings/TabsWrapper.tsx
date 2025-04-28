@@ -5,6 +5,7 @@ import { HeaderTab } from './tabs/HeaderTab';
 import { CellTab } from './tabs/CellTab';
 import { FilterTab } from './tabs/FilterTab';
 import { EditorsTab } from './tabs/EditorsTab';
+import { FormatterTab } from './tabs/FormatterTab';
 import { ColumnSettingsState } from './useColumnSettings';
 
 interface TabsWrapperProps {
@@ -12,6 +13,7 @@ interface TabsWrapperProps {
   updateGeneral: (updates: Partial<ColumnSettingsState['general']>) => void;
   updateHeader: (updates: Partial<ColumnSettingsState['header']>) => void;
   updateCell: (updates: Partial<ColumnSettingsState['cell']>) => void;
+  updateFormatter: (updates: Partial<ColumnSettingsState['formatter']>) => void;
   selectedColumn: string;
 }
 
@@ -20,6 +22,7 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
   updateGeneral,
   updateHeader,
   updateCell,
+  updateFormatter,
   selectedColumn
 }) => {
   const [activeTab, setActiveTab] = useState("general");
@@ -56,6 +59,13 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
     updateCell(updates);
   }, [updateCell]);
 
+  const handleUpdateFormatter = useCallback((updates: Partial<ColumnSettingsState['formatter']>) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('TabsWrapper: handleUpdateFormatter', updates);
+    }
+    updateFormatter(updates);
+  }, [updateFormatter]);
+
   return (
     <Tabs
       value={activeTab}
@@ -66,6 +76,7 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
         <TabsTrigger value="general" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">General</TabsTrigger>
         <TabsTrigger value="header" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Header</TabsTrigger>
         <TabsTrigger value="cell" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Cell</TabsTrigger>
+        <TabsTrigger value="formatter" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Formatter</TabsTrigger>
         <TabsTrigger value="filter" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Filter</TabsTrigger>
         <TabsTrigger value="editors" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Editors</TabsTrigger>
       </TabsList>
@@ -108,6 +119,19 @@ export const TabsWrapper: React.FC<TabsWrapperProps> = ({
         <CellTab
           settings={state.cell}
           onUpdate={handleUpdateCell}
+        />
+      </TabsContent>
+
+      <TabsContent
+        value="formatter"
+        className="pt-1 overflow-y-auto"
+        style={{ maxHeight: 680 }}
+        onFocus={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <FormatterTab
+          settings={state.formatter}
+          onUpdate={handleUpdateFormatter}
         />
       </TabsContent>
 
