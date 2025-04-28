@@ -60,6 +60,62 @@ export interface GridProfile {
   updatedAt: number;
 }
 
+// Type definitions for column formatters
+export interface FormatterSettings {
+  formatterType: 'None' | 'Number' | 'Currency' | 'Percent' | 'Date' | 'Custom';
+  decimalPlaces?: number;
+  useThousandsSeparator?: boolean;
+  currencySymbol?: string;
+  symbolPosition?: 'before' | 'after';
+  formatPreset?: string;
+  customFormat?: string;
+}
+
+// Type definitions for column settings
+export interface ColumnSettings {
+  general?: {
+    headerName?: string;
+    width?: string;
+    sortable?: boolean;
+    resizable?: boolean;
+    editable?: boolean;
+    filter?: string;
+    hidden?: boolean;
+    pinnedPosition?: string;
+    columnType?: string;
+    filterType?: string;
+  };
+  header?: {
+    applyStyles?: boolean;
+    applyTextColor?: boolean;
+    textColor?: string;
+    applyBackgroundColor?: boolean;
+    backgroundColor?: string;
+    applyBorder?: boolean;
+    borderStyle?: string;
+    borderWidth?: number;
+    borderColor?: string;
+    borderSides?: string;
+    alignH?: string;
+    alignV?: string;
+  };
+  cell?: {
+    applyStyles?: boolean;
+    applyTextColor?: boolean;
+    textColor?: string;
+    applyBackgroundColor?: boolean;
+    backgroundColor?: string;
+    applyBorder?: boolean;
+    borderStyle?: string;
+    borderWidth?: number;
+    borderColor?: string;
+    borderSides?: string;
+    alignH?: string;
+    alignV?: string;
+  };
+  formatter?: FormatterSettings;
+}
+
 interface GridSettings {
   // Visual settings
   font: {
@@ -170,20 +226,23 @@ interface GridStore {
 
 // Helper function to format dates according to a format string
 // Used by the formatter feature
-const formatDate = (date: Date, format: string): string => {
-  const pad = (num: number) => num.toString().padStart(2, '0');
-  
+function formatDate(date: Date, format: string): string {
+  // Helper function to pad numbers with leading zeros
+  function pad(num: number): string {
+    return num < 10 ? `0${num}` : `${num}`;
+  }
+
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const day = date.getDate();
-  
+
   const hours = date.getHours();
   const minutes = date.getMinutes();
   const seconds = date.getSeconds();
-  
+
   // Month names for formatting
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
+
   // Replace format patterns
   return format
     .replace('YYYY', year.toString())
@@ -193,6 +252,293 @@ const formatDate = (date: Date, format: string): string => {
     .replace('mm', pad(minutes))
     .replace('ss', pad(seconds))
     .replace('MMM', monthNames[month - 1]);
+}
+
+// Helper function to apply standard Excel formatting to a value
+const handleStandardExcelFormat = (params: { value: any }, formatter: FormatterSettings): string => {
+  const customFormat = formatter.customFormat || '';
+
+  // For numeric values, apply numeric formatting
+  if (typeof params.value === 'number' || !isNaN(Number(params.value))) {
+    const numValue = Number(params.value);
+
+    // Handle basic Excel numeric formats
+    if (customFormat.includes('#') || customFormat.includes('0')) {
+      // Extract format sections (positive;negative;zero;text)
+      const sections = customFormat.split(';');
+      let formatToUse = sections[0]; // Default to positive format
+
+      // Select appropriate section based on value
+      if (numValue < 0 && sections.length > 1) {
+        formatToUse = sections[1]; // Negative format
+      } else if (numValue === 0 && sections.length > 2) {
+        formatToUse = sections[2]; // Zero format
+      }
+
+      // Apply the formatting
+      let result = formatToUse;
+      const absValue = Math.abs(numValue);
+
+      // Handle decimal part
+      const hasDecimal = formatToUse.includes('.');
+      if (hasDecimal) {
+        const parts = formatToUse.split('.');
+        const integerFormat = parts[0];
+        const decimalFormat = parts[1] || '';
+
+        // Format integer part
+        const integerValue = Math.floor(absValue);
+        let integerResult = integerValue.toString();
+
+        // Add thousands separators if format includes commas
+        if (integerFormat.includes(',')) {
+          integerResult = new Intl.NumberFormat(undefined, {
+            useGrouping: true,
+            maximumFractionDigits: 0
+          }).format(integerValue);
+        }
+
+        // Format decimal part
+        let decimalResult = '';
+        if (decimalFormat) {
+          // Count the number of decimal digits required
+          const decimalDigits = (decimalFormat.match(/[0#]/g) || []).length;
+
+          // Format the decimal part with exact precision
+          const decimalValue = absValue - integerValue;
+          const scaledDecimal = Math.round(decimalValue * Math.pow(10, decimalDigits));
+          const scaledDecimalStr = scaledDecimal.toString().padStart(decimalDigits, '0');
+
+          // Handle trailing zeros based on format (0 shows zeros, # omits them)
+          let formattedDecimal = '';
+          for (let i = 0; i < decimalDigits; i++) {
+            const digit = i < scaledDecimalStr.length ? scaledDecimalStr[i] : '0';
+            const formatChar = i < decimalFormat.length ? decimalFormat[i] : '#';
+
+            // If the format char is '0', always show the digit
+            // If it's '#', only show non-zero digits
+            if (formatChar === '0' || (formatChar === '#' && digit !== '0')) {
+              formattedDecimal += digit;
+            } else if (formatChar === '#' && digit === '0') {
+              // Skip trailing zeros for # format
+              if (formattedDecimal.length > 0) {
+                formattedDecimal += digit;
+              }
+            } else {
+              // For other characters in the format (not # or 0), preserve them
+              formattedDecimal += formatChar;
+            }
+          }
+
+          decimalResult = formattedDecimal;
+        }
+
+        // Combine parts - only add decimal point if there's a decimal part
+        result = integerResult + (decimalResult ? '.' + decimalResult : '');
+      } else {
+        // No decimal part
+        result = absValue.toString();
+
+        // Add thousands separators if format includes commas
+        if (formatToUse.includes(',')) {
+          result = new Intl.NumberFormat(undefined, {
+            useGrouping: true,
+            maximumFractionDigits: 0
+          }).format(absValue);
+        }
+
+        // Replace in the format - use regex to match the numeric part
+        const numericPartRegex = /[#0,]+/;
+        return formatToUse.replace(numericPartRegex, result);
+      }
+    }
+
+    // Handle percent format
+    if (customFormat.includes('%')) {
+      const percentValue = numValue * 100;
+      const decimalPlaces = (customFormat.match(/\.0+%/) || [''])[0].length - 2;
+      return percentValue.toFixed(decimalPlaces >= 0 ? decimalPlaces : 0) + '%';
+    }
+
+    // Handle currency format like $#,##0.00
+    if (customFormat.includes('$')) {
+      const currencySymbol = '$';
+      const hasCommas = customFormat.includes(',');
+      const decimalPlaces = (customFormat.match(/\.0+/) || [''])[0].length - 1;
+
+      return currencySymbol + new Intl.NumberFormat(undefined, {
+        useGrouping: hasCommas,
+        minimumFractionDigits: decimalPlaces >= 0 ? decimalPlaces : 0,
+        maximumFractionDigits: decimalPlaces >= 0 ? decimalPlaces : 0
+      }).format(numValue);
+    }
+
+    // Fall back to simple value replacement if no Excel formatting matched
+    return customFormat.replace('{value}', numValue.toString());
+  }
+
+  // For date values
+  if (params.value instanceof Date || !isNaN(new Date(params.value).getTime())) {
+    const dateValue = params.value instanceof Date ? params.value : new Date(params.value);
+
+    // Replace Excel date format codes with our format patterns
+    let format = customFormat
+      .replace('mm', 'MM')     // minutes in Excel, month in our formatter
+      .replace('yyyy', 'YYYY') // 4-digit year
+      .replace('yy', 'YY')     // 2-digit year
+      .replace('dd', 'DD')     // day
+      .replace('hh', 'HH')     // hour
+      .replace('ss', 'ss');    // seconds
+
+    return formatDate(dateValue, format);
+  }
+
+  // Default case - simple replacement for string values
+  return customFormat.replace('{value}', String(params.value));
+};
+
+interface ExcelFormatParams {
+  value: any;
+  node?: any;
+  colDef?: any;
+  [key: string]: any;
+}
+
+// Helper function to recursively apply Excel formats - handles nested formats
+const applyExcelFormat = (params: ExcelFormatParams, formatter: FormatterSettings): string => {
+  // Get the custom format
+  const customFormat = formatter.customFormat || '';
+
+  // Handle complex formats first with custom logic
+  // Then fall back to standard formats for simpler cases
+
+  // Handle special Excel format types
+
+  // 1. Handle conditional formatting with [condition]?[format]:[else_format]
+  // Example: [>100]"Large":"Small"
+  const conditionalRegex = /\[(>|>=|<|<=|=|<>)(-?\d+(\.\d+)?)\](.*):(.*)/;
+  const conditionalMatch = customFormat.match(conditionalRegex);
+
+  if (conditionalMatch) {
+    const operator = conditionalMatch[1];
+    const compareValue = parseFloat(conditionalMatch[2]);
+    const trueFormat = conditionalMatch[4];
+    const falseFormat = conditionalMatch[5];
+
+    // Get numeric value to compare
+    let valueToCompare = 0;
+    if (typeof params.value === 'number') {
+      valueToCompare = params.value;
+    } else if (typeof params.value === 'string' && !isNaN(parseFloat(params.value))) {
+      valueToCompare = parseFloat(params.value);
+    }
+
+    // Perform comparison and apply appropriate format
+    let conditionMet = false;
+    switch (operator) {
+      case '>': conditionMet = valueToCompare > compareValue; break;
+      case '>=': conditionMet = valueToCompare >= compareValue; break;
+      case '<': conditionMet = valueToCompare < compareValue; break;
+      case '<=': conditionMet = valueToCompare <= compareValue; break;
+      case '=': conditionMet = valueToCompare === compareValue; break;
+      case '<>': conditionMet = valueToCompare !== compareValue; break;
+    }
+
+    // Apply the appropriate format based on condition
+    const formatToUse = conditionMet ? trueFormat : falseFormat;
+
+    // Handle quoted strings vs. nested formats
+    if (formatToUse.startsWith('"') && formatToUse.endsWith('"')) {
+      // It's a literal string
+      return formatToUse.substring(1, formatToUse.length - 1);
+    } else {
+      // It's another format to apply - recursive call with new format
+      const nestedFormatter = { ...formatter, customFormat: formatToUse };
+      return applyExcelFormat(params, nestedFormatter);
+    }
+  }
+
+  // 2. Handle switch/case formatting with [value1]format1;[value2]format2;...;[default]
+  // Example: [1]"One";[2]"Two";[3]"Three";"Other"
+  const switchRegex = /^\[(.+?)\](.+?)(?:;|$)/;
+  if (customFormat.includes(';') && switchRegex.test(customFormat)) {
+    const cases: Array<{value: string, format: string}> = [];
+    let remainingFormat = customFormat;
+    let defaultCase = '';
+
+    // Parse all cases
+    while (remainingFormat && switchRegex.test(remainingFormat)) {
+      const match = remainingFormat.match(switchRegex);
+      if (match) {
+        const caseValue = match[1];
+        const caseFormat = match[2];
+        cases.push({ value: caseValue, format: caseFormat });
+        remainingFormat = remainingFormat.substring(match[0].length);
+
+        // Check if there's a semicolon at the start and remove it
+        if (remainingFormat.startsWith(';')) {
+          remainingFormat = remainingFormat.substring(1);
+        }
+      } else {
+        break;
+      }
+    }
+
+    // If there's anything left, it's the default case
+    if (remainingFormat && !switchRegex.test(remainingFormat)) {
+      defaultCase = remainingFormat;
+    }
+
+    // Convert the value to string for comparison
+    const valueStr = params.value?.toString() || '';
+
+    // Find matching case
+    let matchedFormat = null;
+    for (const caseItem of cases) {
+      if (caseItem.value === valueStr) {
+        matchedFormat = caseItem.format;
+        break;
+      }
+    }
+
+    // Use default if no match found
+    const formatToUse = matchedFormat || defaultCase;
+
+    // Handle quoted strings vs. nested formats
+    if (formatToUse.startsWith('"') && formatToUse.endsWith('"')) {
+      // It's a literal string
+      return formatToUse.substring(1, formatToUse.length - 1);
+    } else {
+      // It's another format to apply - recursive call
+      const nestedFormatter = { ...formatter, customFormat: formatToUse };
+      return applyExcelFormat(params, nestedFormatter);
+    }
+  }
+
+  // 3. Handle color formatting with [color] prefix
+  // Example: [Red]0.00;[Blue]-0.00;[Green]0.00
+  // Also supports hex colors like [#FF5500]0.00
+  const colorRegex = /^\[(Red|Green|Blue|Yellow|Cyan|Magenta|Black|White|Gray|Orange|Purple|Brown|#[0-9A-Fa-f]{3,6})\](.*)/i;
+  const colorMatch = customFormat.match(colorRegex);
+
+  if (colorMatch) {
+    // Extract the color and format without the color
+    const color = colorMatch[1].toLowerCase();
+    const formatWithoutColor = colorMatch[2];
+
+    // Store color information for cell styling if we have access to the cell node
+    if (params.node && params.colDef) {
+      // Store color info for later use in the cellStyle function
+      params.colDef.__cellColor = color;
+    }
+
+    // Apply the format without the color
+    const nestedFormatter = { ...formatter, customFormat: formatWithoutColor };
+    return applyExcelFormat(params, nestedFormatter);
+  }
+
+  // For all other cases, use the standard Excel formatting logic
+  return handleStandardExcelFormat(params, formatter);
 };
 
 // Create the store
@@ -470,7 +816,6 @@ export const useGridStore = create<GridStore>()(
                 if (defaultSettings.columnSettingsProfiles &&
                     Object.keys(defaultSettings.columnSettingsProfiles).length > 0) {
                   try {
-                    // Apply all column profiles in a single batch
                     get().applyAllColumnProfiles();
                     needsGridRefresh = true;
                   } catch (e) {
@@ -690,9 +1035,9 @@ export const useGridStore = create<GridStore>()(
               }
 
               // Apply sort state if available
-              if (typeof gridApi.setSortModel === 'function') {
+              if (newSettings.sortState && Array.isArray(newSettings.sortState) &&
+                  newSettings.sortState.length > 0 && typeof gridApi.setSortModel === 'function') {
                 try {
-                  // Always set sort model, even if null/empty to clear existing sorts
                   gridApi.setSortModel(
                     (newSettings.sortState && Array.isArray(newSettings.sortState) &&
                     newSettings.sortState.length > 0) ? newSettings.sortState : null
@@ -845,7 +1190,7 @@ export const useGridStore = create<GridStore>()(
               console.log('Using direct column state from grid API for export');
             }
             catch (e) {
-              console.warn('Failed to use direct column state for export, falling back to getGridColumnState', e);
+              console.warn('Failed to use direct column state, falling back to getGridColumnState', e);
               try {
                 columnsState = get().getGridColumnState();
               } catch (e2) {
@@ -1197,7 +1542,7 @@ export const useGridStore = create<GridStore>()(
           let pivotState = null;
           let chartState = null;
           // Keep existing column settings profiles
-          const columnSettingsProfiles = get().settings.columnSettingsProfiles || {};
+          const columnSettingsProfiles = get().settings.columnSettingsProfiles;
 
           try {
             columnsState = get().getGridColumnState();
@@ -1316,7 +1661,7 @@ export const useGridStore = create<GridStore>()(
                   console.error('Error getting current column widths:', error);
                 }
 
-                // RULE 2: When the app is refreshed, apply the saved column widths
+                // RULE 2: When the app is refreshed, load the column settings from the active profile
                 // Don't preserve current widths during initialization
                 gridApi.applyColumnState({
                   state: formattedColumnState,
@@ -1338,14 +1683,13 @@ export const useGridStore = create<GridStore>()(
           }
 
           // Apply filter state if available
-          if (settings.filterState) {
-            if (typeof gridApi.setFilterModel === 'function') {
-              try {
-                gridApi.setFilterModel(settings.filterState);
-                needsRefresh = true;
-              } catch (error) {
-                console.warn('Failed to apply filter state:', error);
-              }
+          if (typeof gridApi.setFilterModel === 'function') {
+            try {
+              // Always set filter model, even if null/empty to clear existing filters
+              gridApi.setFilterModel(settings.filterState);
+              needsRefresh = true;
+            } catch (error) {
+              console.warn('Error applying filter state:', error);
             }
           }
 
@@ -1357,7 +1701,7 @@ export const useGridStore = create<GridStore>()(
                 gridApi.setSortModel(settings.sortState);
                 needsRefresh = true;
               } catch (error) {
-                console.warn('Failed to apply sort state:', error);
+                console.warn('Error applying sort state:', error);
               }
             }
             // Alternative approach using applyColumnState
@@ -1377,7 +1721,7 @@ export const useGridStore = create<GridStore>()(
                 });
                 needsRefresh = true;
               } catch (error) {
-                console.warn('Failed to apply column sort state:', error);
+                console.warn('Error applying column sort state:', error);
               }
             }
           }
@@ -1389,7 +1733,7 @@ export const useGridStore = create<GridStore>()(
                 gridApi.setRowGroupColumns(settings.rowGroupState);
                 needsRefresh = true;
               } catch (error) {
-                console.warn('Failed to apply row group state:', error);
+                console.warn('Error applying row group state:', error);
               }
             }
           }
@@ -1401,7 +1745,7 @@ export const useGridStore = create<GridStore>()(
                 gridApi.setPivotColumns(settings.pivotState);
                 needsRefresh = true;
               } catch (error) {
-                console.warn('Failed to apply pivot state:', error);
+                console.warn('Error applying pivot state:', error);
               }
             }
           }
@@ -1413,7 +1757,7 @@ export const useGridStore = create<GridStore>()(
                 gridApi.restoreChartModels(settings.chartState);
                 needsRefresh = true;
               } catch (error) {
-                console.warn('Failed to apply chart state:', error);
+                console.warn('Error applying chart state:', error);
               }
             }
           }
@@ -1505,16 +1849,17 @@ export const useGridStore = create<GridStore>()(
             const column = gridApi.getColumn(columnField);
             if (column) {
               // Get the current width from the column state
-              const columnState = gridApi.getColumnState().find((col: any) => col.colId === columnField);
-              if (columnState && columnState.width) {
+              const columnState = gridApi.getColumnState();
+              const columnInfo = columnState.find((col: any) => col.colId === columnField);
+              if (columnInfo && columnInfo.width) {
                 // Update the width in the settings
                 updatedSettings.general = {
                   ...updatedSettings.general,
-                  width: columnState.width.toString()
+                  width: columnInfo.width.toString()
                 };
 
                 if (process.env.NODE_ENV === 'development') {
-                  console.log(`Captured current width for column ${columnField}: ${columnState.width}px`);
+                  console.log(`Captured current width for column ${columnField}: ${columnInfo.width}px`);
                 }
               }
             }
@@ -1608,6 +1953,7 @@ export const useGridStore = create<GridStore>()(
               style.borderSides !== undefined) {
             const borderStyle = `${style.borderWidth}px ${style.borderStyle.toLowerCase()} ${style.borderColor}`;
             const borderProperty = style.borderSides === 'All' ? 'border' : `border-${style.borderSides.toLowerCase()}`;
+
             cssProps += `${borderProperty}: ${borderStyle} !important; `;
           }
 
@@ -1617,8 +1963,8 @@ export const useGridStore = create<GridStore>()(
               /* Direct attribute selectors with high specificity */
               div.ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
               div.ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
-              html body div.ag-theme-quartz div.ag-header-cell[col-id="${columnField}"],
-              html body div.ag-theme-quartz-dark div.ag-header-cell[col-id="${columnField}"],
+              html body div.ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
+              html body div.ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"],
               div.ag-theme-quartz div.ag-header-container div.ag-header-row div.ag-header-cell[col-id="${columnField}"],
               .ag-theme-quartz .ag-header-cell.custom-header-${columnField},
               .ag-theme-quartz-dark .ag-header-cell.custom-header-${columnField} {
@@ -1682,19 +2028,19 @@ export const useGridStore = create<GridStore>()(
         if (style) {
           // Build style string with individual properties - only include defined properties
           let cssProps = '';
-          if (style.fontFamily) cssProps += `font-family: ${style.fontFamily} !important; `;
-          if (style.fontSize) cssProps += `font-size: ${style.fontSize} !important; `;
-          if (style.bold) cssProps += 'font-weight: bold !important; ';
-          if (style.italic) cssProps += 'font-style: italic !important; ';
-          if (style.underline) cssProps += 'text-decoration: underline !important; ';
+          if (style.fontFamily) cssProps += `font-family: ${style.fontFamily}; `;
+          if (style.fontSize) cssProps += `font-size: ${style.fontSize}; `;
+          if (style.bold) cssProps += 'font-weight: bold; ';
+          if (style.italic) cssProps += 'font-style: italic; ';
+          if (style.underline) cssProps += 'text-decoration: underline; ';
           
           // Only include text color if it's explicitly defined (not undefined)
-          if (style.textColor !== undefined) cssProps += `color: ${style.textColor} !important; `;
+          if (style.textColor !== undefined) cssProps += `color: ${style.textColor}; `;
           
           // Only include background color if it's explicitly defined (not undefined)
-          if (style.backgroundColor !== undefined) cssProps += `background-color: ${style.backgroundColor} !important; `;
+          if (style.backgroundColor !== undefined) cssProps += `background-color: ${style.backgroundColor}; `;
           
-          if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
+          if (style.alignH) cssProps += `text-align: ${style.alignH}; `;
 
           // Add border styles if all required properties are explicitly defined
           if (style.borderStyle !== undefined && 
@@ -1703,7 +2049,8 @@ export const useGridStore = create<GridStore>()(
               style.borderSides !== undefined) {
             const borderStyle = `${style.borderWidth}px ${style.borderStyle.toLowerCase()} ${style.borderColor}`;
             const borderProperty = style.borderSides === 'All' ? 'border' : `border-${style.borderSides.toLowerCase()}`;
-            cssProps += `${borderProperty}: ${borderStyle} !important; `;
+
+            cssProps += `${borderProperty}: ${borderStyle}; `;
           }
 
           // Apply to all possible cell selectors with high specificity
@@ -1720,7 +2067,7 @@ export const useGridStore = create<GridStore>()(
               .ag-row-odd .ag-cell[col-id="${columnField}"],
               div.ag-theme-quartz .ag-cell.custom-cell-${columnField},
               div.ag-theme-quartz-dark .ag-cell.custom-cell-${columnField} {
-                ${cssProps}
+                ${cssProps} !important;
               }
             `;
           }
@@ -1775,12 +2122,13 @@ export const useGridStore = create<GridStore>()(
               if (styles.bold) columnStyle += 'font-weight: bold; ';
               if (styles.italic) columnStyle += 'font-style: italic; ';
               if (styles.underline) columnStyle += 'text-decoration: underline; ';
-              if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
-              if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
+              // Only include text color if explicitly defined
+              if (styles.textColor !== undefined) columnStyle += `color: ${styles.textColor}; `;
+              // Only include background color if explicitly defined
+              if (styles.backgroundColor !== undefined) columnStyle += `background-color: ${styles.backgroundColor}; `;
               if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
 
               if (columnStyle) {
-                // Simplified selectors for better performance
                 allHeaderStyles += `
                   .ag-theme-quartz .ag-header-cell[col-id="${columnField}"],
                   .ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"] {
@@ -1801,7 +2149,10 @@ export const useGridStore = create<GridStore>()(
               }
 
               // Add border styles if specified
-              if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+              if (styles.borderStyle !== undefined && 
+                  styles.borderWidth !== undefined && 
+                  styles.borderColor !== undefined && 
+                  styles.borderSides !== undefined) {
                 const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
                 const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
 
@@ -1852,7 +2203,6 @@ export const useGridStore = create<GridStore>()(
               if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
 
               if (columnStyle) {
-                // Simplified selectors for better performance
                 allCellStyles += `
                   .ag-theme-quartz .ag-cell[col-id="${columnField}"],
                   .ag-theme-quartz-dark .ag-cell[col-id="${columnField}"] {
@@ -1862,7 +2212,10 @@ export const useGridStore = create<GridStore>()(
               }
 
               // Add border styles if specified
-              if (styles.borderStyle && styles.borderWidth && styles.borderColor && styles.borderSides) {
+              if (styles.borderStyle !== undefined && 
+                  styles.borderWidth !== undefined && 
+                  styles.borderColor !== undefined && 
+                  styles.borderSides !== undefined) {
                 const borderStyle = `${styles.borderWidth}px ${styles.borderStyle.toLowerCase()} ${styles.borderColor}`;
                 const borderProperty = styles.borderSides === 'All' ? 'border' : `border-${styles.borderSides.toLowerCase()}`;
 
@@ -2133,17 +2486,17 @@ export const useGridStore = create<GridStore>()(
             const headerStyles = { ...columnSettings.header };
             
             // Remove text color if not applied
-            if (!columnSettings.header.applyTextColor) {
+            if (!headerStyles.applyTextColor) {
               headerStyles.textColor = undefined;
             }
             
             // Remove background color if not applied
-            if (!columnSettings.header.applyBackgroundColor) {
+            if (!headerStyles.applyBackgroundColor) {
               headerStyles.backgroundColor = undefined;
             }
             
             // Remove border properties if not applied
-            if (!columnSettings.header.applyBorder) {
+            if (!headerStyles.applyBorder) {
               headerStyles.borderStyle = undefined;
               headerStyles.borderWidth = undefined;
               headerStyles.borderColor = undefined;
@@ -2159,10 +2512,10 @@ export const useGridStore = create<GridStore>()(
             
             if (shouldApplyStyles) {
               // Set header class with both attribute and function approach for maximum compatibility
-              colDef.headerClass = (params) => {
+              colDef.headerClass = (params: any) => {
                 // Return both the custom class and any existing classes
                 const existingClasses = typeof colDef.headerClass === 'string'
-                  ? colDef.headerClass.split(' ').filter(c => c !== `custom-header-${columnField}`)
+                  ? colDef.headerClass.split(' ').filter((c: string) => c !== `custom-header-${columnField}`)
                   : [];
                 return [`custom-header-${columnField}`, ...existingClasses].join(' ');
               };
@@ -2194,17 +2547,17 @@ export const useGridStore = create<GridStore>()(
             const cellStyles = { ...columnSettings.cell };
             
             // Remove text color if not applied
-            if (!columnSettings.cell.applyTextColor) {
+            if (!cellStyles.applyTextColor) {
               cellStyles.textColor = undefined;
             }
             
             // Remove background color if not applied
-            if (!columnSettings.cell.applyBackgroundColor) {
+            if (!cellStyles.applyBackgroundColor) {
               cellStyles.backgroundColor = undefined;
             }
             
             // Remove border properties if not applied
-            if (!columnSettings.cell.applyBorder) {
+            if (!cellStyles.applyBorder) {
               cellStyles.borderStyle = undefined;
               cellStyles.borderWidth = undefined;
               cellStyles.borderColor = undefined;
@@ -2220,10 +2573,10 @@ export const useGridStore = create<GridStore>()(
             
             if (shouldApplyStyles) {
               // Set cell class with both attribute and function approach for maximum compatibility
-              colDef.cellClass = (params) => {
+              colDef.cellClass = (params: any) => {
                 // Return both the custom class and any existing classes
                 const existingClasses = typeof colDef.cellClass === 'string'
-                  ? colDef.cellClass.split(' ').filter(c => c !== `custom-cell-${columnField}`)
+                  ? colDef.cellClass.split(' ').filter((c: string) => c !== `custom-cell-${columnField}`)
                   : [];
                 return [`custom-cell-${columnField}`, ...existingClasses].join(' ');
               };
@@ -2248,25 +2601,25 @@ export const useGridStore = create<GridStore>()(
             // Only apply formatter if type is not None
             if (columnSettings.formatter.formatterType !== 'None') {
               // Create valueFormatter function based on formatter type
-              colDef.valueFormatter = (params) => {
+              colDef.valueFormatter = (params: { value: any }) => {
                 if (params.value === null || params.value === undefined) {
                   return '';
                 }
 
                 try {
-                  const formatter = columnSettings.formatter;
+                  const formatter = columnSettings.formatter as FormatterSettings;
                   
                   switch (formatter.formatterType) {
                     case 'Number': {
                       // Format as number
                       const value = Number(params.value);
-                      if (isNaN(value)) return params.value;
+                      if (isNaN(value)) return String(params.value);
                       
                       // Create number formatter options
                       const options: Intl.NumberFormatOptions = {
-                        minimumFractionDigits: formatter.decimalPlaces || 0,
-                        maximumFractionDigits: formatter.decimalPlaces || 0,
-                        useGrouping: formatter.useThousandsSeparator
+                        minimumFractionDigits: formatter.decimalPlaces ?? 0,
+                        maximumFractionDigits: formatter.decimalPlaces ?? 0,
+                        useGrouping: formatter.useThousandsSeparator === true
                       };
                       
                       return new Intl.NumberFormat(undefined, options).format(value);
@@ -2275,32 +2628,33 @@ export const useGridStore = create<GridStore>()(
                     case 'Currency': {
                       // Format as currency
                       const value = Number(params.value);
-                      if (isNaN(value)) return params.value;
+                      if (isNaN(value)) return String(params.value);
                       
                       // Create currency formatter options
                       const options: Intl.NumberFormatOptions = {
-                        minimumFractionDigits: formatter.decimalPlaces || 2,
-                        maximumFractionDigits: formatter.decimalPlaces || 2,
+                        minimumFractionDigits: formatter.decimalPlaces ?? 2,
+                        maximumFractionDigits: formatter.decimalPlaces ?? 2,
                         useGrouping: true
                       };
                       
                       const formattedValue = new Intl.NumberFormat(undefined, options).format(value);
                       
                       // Apply currency symbol based on position
+                      const symbol = formatter.currencySymbol || '$';
                       return formatter.symbolPosition === 'before' 
-                        ? `${formatter.currencySymbol}${formattedValue}` 
-                        : `${formattedValue}${formatter.currencySymbol}`;
+                        ? `${symbol}${formattedValue}` 
+                        : `${formattedValue}${symbol}`;
                     }
                     
                     case 'Percent': {
                       // Format as percentage
                       const value = Number(params.value);
-                      if (isNaN(value)) return params.value;
+                      if (isNaN(value)) return String(params.value);
                       
                       // Create percentage formatter options
                       const options: Intl.NumberFormatOptions = {
-                        minimumFractionDigits: formatter.decimalPlaces || 0,
-                        maximumFractionDigits: formatter.decimalPlaces || 0,
+                        minimumFractionDigits: formatter.decimalPlaces ?? 0,
+                        maximumFractionDigits: formatter.decimalPlaces ?? 0,
                         style: 'percent'
                       };
                       
@@ -2317,10 +2671,10 @@ export const useGridStore = create<GridStore>()(
                       } else if (typeof params.value === 'string' || typeof params.value === 'number') {
                         date = new Date(params.value);
                       } else {
-                        return params.value;
+                        return String(params.value);
                       }
                       
-                      if (isNaN(date.getTime())) return params.value;
+                      if (isNaN(date.getTime())) return String(params.value);
                       
                       // Get format from preset or use default
                       const format = formatter.formatPreset || 'MM/DD/YYYY';
@@ -2330,24 +2684,127 @@ export const useGridStore = create<GridStore>()(
                     }
                     
                     case 'Custom': {
-                      // For custom format, use a simple replacement approach
-                      // This could be expanded to a more complex formatting system in the future
-                      return formatter.customFormat ? 
-                        formatter.customFormat.replace('{value}', String(params.value)) : 
-                        params.value;
+                      // For custom format, use Excel-like formatting
+                      const customFormat = formatter.customFormat || '';
+                      
+                      if (!customFormat) return String(params.value);
+                      
+                      try {
+                        // Use the helper function to apply Excel formatting
+                        return applyExcelFormat(params, formatter);
+                      } catch (error) {
+                        console.error('Error applying custom format:', error);
+                        return String(params.value);
+                      }
                     }
                     
                     default:
-                      return params.value;
+                      return String(params.value);
                   }
                 } catch (error) {
                   console.error('Error formatting cell value:', error);
-                  return params.value;
+                  return String(params.value);
                 }
               };
+              
+              // Add cellStyle function to handle color formatting from Excel
+              colDef.cellStyle = (params: any) => {
+                try {
+                  // If using custom formatter and it's a color format
+                  if (columnSettings.formatter?.formatterType === 'Custom' &&
+                      columnSettings.formatter?.customFormat) {
+                    
+                    const customFormat = columnSettings.formatter.customFormat;
+                    
+                    // Handle color specifications - now including hex colors (#RRGGBB)
+                    const colorRegex = /\[(Red|Green|Blue|Yellow|Cyan|Magenta|Black|White|Gray|Orange|Purple|Brown|#[0-9A-Fa-f]{3,6})\]/i;
+                    const colors = customFormat.match(new RegExp(colorRegex, 'gi'));
+                    
+                    if (colors && colors.length > 0) {
+                      // Extract colors from the format
+                      const colorMapping: Record<string, string> = {
+                        'red': '#ff0000',
+                        'green': '#008000',
+                        'blue': '#0000ff',
+                        'yellow': '#ffff00',
+                        'cyan': '#00ffff',
+                        'magenta': '#ff00ff',
+                        'black': '#000000',
+                        'white': '#ffffff',
+                        'gray': '#808080',
+                        'orange': '#ffa500',
+                        'purple': '#800080',
+                        'brown': '#a52a2a'
+                      };
+                      
+                      // Apply the right color based on value comparison for conditional formats
+                      const value = Number(params.value);
+                      
+                      // Look for conditional color formatting like [>0][Green] or [<0][Red]
+                      // Also support hex colors like [>0][#FF0000]
+                      const conditionalColorMatch = customFormat.match(/\[(>|>=|<|<=|=|<>)(-?\d+(\.\d+)?)\]\[(Red|Green|Blue|Yellow|Cyan|Magenta|Black|White|Gray|Orange|Purple|Brown|#[0-9A-Fa-f]{3,6})\]/i);
+                      
+                      if (conditionalColorMatch) {
+                        const operator = conditionalColorMatch[1];
+                        const compareValue = parseFloat(conditionalColorMatch[2]);
+                        const colorName = conditionalColorMatch[4].toLowerCase();
+                        
+                        // Check condition
+                        let conditionMet = false;
+                        switch (operator) {
+                          case '>': conditionMet = value > compareValue; break;
+                          case '>=': conditionMet = value >= compareValue; break;
+                          case '<': conditionMet = value < compareValue; break;
+                          case '<=': conditionMet = value <= compareValue; break;
+                          case '=': conditionMet = value === compareValue; break;
+                          case '<>': conditionMet = value !== compareValue; break;
+                        }
+                        
+                        if (conditionMet) {
+                          // If it's a hex color, use it directly
+                          if (colorName.startsWith('#')) {
+                            return { color: colorName };
+                          }
+                          // Otherwise use from our mapping
+                          return { color: colorMapping[colorName] || colorName };
+                        }
+                      } 
+                      // For non-conditional color formats or switch case formats
+                      else if (params.colDef.__cellColor) {
+                        const colorName = params.colDef.__cellColor.toLowerCase();
+                        // If it's a hex color, use it directly
+                        if (colorName.startsWith('#')) {
+                          return { color: colorName };
+                        }
+                        // Otherwise use from our mapping
+                        return { color: colorMapping[colorName] || colorName };
+                      }
+                      // Simple color format like [Red]
+                      else {
+                        const simpleColorMatch = customFormat.match(/\[(Red|Green|Blue|Yellow|Cyan|Magenta|Black|White|Gray|Orange|Purple|Brown|#[0-9A-Fa-f]{3,6})\]/i);
+                        if (simpleColorMatch) {
+                          const colorName = simpleColorMatch[1].toLowerCase();
+                          // If it's a hex color, use it directly
+                          if (colorName.startsWith('#')) {
+                            return { color: colorName };
+                          }
+                          // Otherwise use from our mapping
+                          return { color: colorMapping[colorName] || colorName };
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error applying cell color:', error);
+                }
+                
+                // Return empty object if no styling is needed
+                return {};
+              };
             } else {
-              // If formatter type is None, remove valueFormatter
+              // If formatter type is None, remove valueFormatter and cellStyle
               colDef.valueFormatter = undefined;
+              colDef.cellStyle = undefined;
             }
           }
 
@@ -2457,7 +2914,7 @@ export const useGridStore = create<GridStore>()(
           console.log(`Applying ${profileNames.length} column profiles in batch`);
 
           // Collect columns needing styling
-          const columnsToProcess = [];
+          const columnsToProcess: string[] = [];
 
           // First pass: identify all column profiles
           profileNames.forEach(profileName => {
@@ -2578,7 +3035,7 @@ export const useGridStore = create<GridStore>()(
             const styles = pendingHeaderStyles[columnField];
             if (!styles) return;
 
-            // Convert styles object to CSS - only include defined properties
+            // Convert styles object to CSS - simplified for better performance
             let columnStyle = '';
             if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
             if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
@@ -2716,7 +3173,6 @@ export const useGridStore = create<GridStore>()(
                 // Set header name - ensure it's a string
                 if (columnSettings.general.headerName) {
                   colDef.headerName = String(columnSettings.general.headerName);
-                  needsRefresh = true;
                 }
 
                 // Set boolean properties with explicit conversion
@@ -2725,11 +3181,27 @@ export const useGridStore = create<GridStore>()(
                 colDef.editable = columnSettings.general.editable === true;
                 colDef.filter = columnSettings.general.filter === 'Enabled' ? true : false;
 
-                // Apply column visibility if needed
-                const visible = !columnSettings.general.hidden;
+                // Apply column visibility via API
                 if (typeof column.setVisible === 'function') {
+                  const visible = !columnSettings.general.hidden;
                   column.setVisible(visible);
-                  needsRefresh = true;
+                }
+
+                // Apply column pinned state with API
+                if (typeof gridApi.applyColumnState === 'function') {
+                  const colId = column.getColId();
+                  let pinnedState = null;
+
+                  if (columnSettings.general.pinnedPosition === 'Left') {
+                    pinnedState = 'left';
+                  } else if (columnSettings.general.pinnedPosition === 'Right') {
+                    pinnedState = 'right';
+                  }
+
+                  gridApi.applyColumnState({
+                    state: [{ colId, pinned: pinnedState }],
+                    defaultState: { pinned: null }
+                  });
                 }
               }
 

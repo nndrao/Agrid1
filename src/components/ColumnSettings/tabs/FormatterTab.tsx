@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ColumnSettingsState } from '../useColumnSettings';
+import FormatterHelp from '../FormatterHelp';
 
 // Define formatter types
 export const formatterTypes = ['None', 'Number', 'Date', 'Currency', 'Percent', 'Custom'];
@@ -168,14 +169,20 @@ export const FormatterTab: React.FC<FormatterTabProps> = ({ settings, onUpdate }
       case 'Custom':
         return (
           <FormField label="Custom Format" htmlFor="custom-format">
-            <Input
-              id="custom-format"
-              value={safeSettings.customFormat || ''}
-              onChange={(e) => handleUpdate({ customFormat: e.target.value })}
-              onKeyDown={(e) => e.stopPropagation()}
-              placeholder="Enter custom format string"
-              className="h-8 text-[13px] bg-card border border-border/80 rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="custom-format"
+                value={safeSettings.customFormat || ''}
+                onChange={(e) => handleUpdate({ customFormat: e.target.value })}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="Enter Excel-like format, e.g. #,##0.00"
+                className="h-8 text-[13px] bg-card border border-border/80 rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <FormatterHelp />
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Supports Excel-like formats. Click the ? for help.
+            </div>
           </FormField>
         );
       
