@@ -14,7 +14,6 @@ import { GeneralTab } from './tabs/GeneralTab';
 import { HeaderTab } from './tabs/HeaderTab';
 import { CellTab } from './tabs/CellTab';
 import { FilterTab } from './tabs/FilterTab';
-import { FormattersTab } from './tabs/FormattersTab';
 import { EditorsTab } from './tabs/EditorsTab';
 
 // Import grid store instead of local state management
@@ -340,7 +339,6 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
                 <TabsTrigger value="header" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Header</TabsTrigger>
                 <TabsTrigger value="cell" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Cell</TabsTrigger>
                 <TabsTrigger value="filter" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Filter</TabsTrigger>
-                <TabsTrigger value="formatters" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Formatters</TabsTrigger>
                 <TabsTrigger value="editors" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-[13px] px-4 py-1 rounded">Editors</TabsTrigger>
               </TabsList>
               
@@ -370,9 +368,6 @@ export const ColumnSettingsDialog: React.FC<ColumnSettingsDialogProps> = ({
                 <FilterTab />
               </TabsContent>
               
-              <TabsContent value="formatters" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
-                <FormattersTab />
-              </TabsContent>
               
               <TabsContent value="editors" className="pt-1 overflow-y-auto" style={{ maxHeight: 680 }}>
                 <EditorsTab />
