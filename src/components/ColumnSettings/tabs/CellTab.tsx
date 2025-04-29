@@ -60,7 +60,7 @@ export const CellTab: React.FC<CellTabProps> = ({ settings, onUpdate }) => {
             }}
           />
           <Label htmlFor="apply-cell-styles" className="text-sm font-medium cursor-pointer">
-            Apply these styles to the grid cells
+            Apply color, background and border styles to the grid cells
           </Label>
         </div>
         

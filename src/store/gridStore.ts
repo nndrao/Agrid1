@@ -1554,16 +1554,13 @@ export const useGridStore = create<GridStore>()(
         const style = styles;
 
         if (style) {
-          // Build style string with individual properties
+          // Build style string with only color, background, and border properties
+          // The rest will be applied through headerComponentParams
           let cssProps = '';
-          if (style.fontFamily) cssProps += `font-family: ${style.fontFamily} !important; `;
-          if (style.fontSize) cssProps += `font-size: ${style.fontSize} !important; `;
-          if (style.bold) cssProps += 'font-weight: bold !important; ';
-          if (style.italic) cssProps += 'font-style: italic !important; ';
-          if (style.underline) cssProps += 'text-decoration: underline !important; ';
+          
+          // Apply only color and background styles (which are controlled by applyStyles flag)
           if (style.textColor) cssProps += `color: ${style.textColor} !important; `;
           if (style.backgroundColor) cssProps += `background-color: ${style.backgroundColor} !important; `;
-          if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
 
           // Add border styles if specified
           if (style.borderStyle && style.borderWidth && style.borderColor && style.borderSides) {
@@ -1586,22 +1583,6 @@ export const useGridStore = create<GridStore>()(
                 ${cssProps}
               }
             `;
-
-            // Special handling for text alignment
-            if (style.alignH) {
-              directStyles += `
-                /* Direct label alignment with high specificity */
-                div.ag-theme-quartz .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
-                div.ag-theme-quartz-dark .ag-header-cell[col-id="${columnField}"] .ag-header-cell-label,
-                div.ag-theme-quartz div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label,
-                div.ag-theme-quartz-dark div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label,
-                html body div.ag-theme-quartz div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label,
-                html body div.ag-theme-quartz-dark div.ag-header-cell[col-id="${columnField}"] div.ag-header-cell-label {
-                  justify-content: ${style.alignH === 'left' ? 'flex-start' :
-                                    style.alignH === 'center' ? 'center' : 'flex-end'} !important;
-                }
-              `;
-            }
           }
         }
 
@@ -1641,16 +1622,13 @@ export const useGridStore = create<GridStore>()(
         const style = styles;
 
         if (style) {
-          // Build style string with individual properties
+          // Build style string with only color, background, and border properties
+          // The rest will be applied through cellStyle
           let cssProps = '';
-          if (style.fontFamily) cssProps += `font-family: ${style.fontFamily} !important; `;
-          if (style.fontSize) cssProps += `font-size: ${style.fontSize} !important; `;
-          if (style.bold) cssProps += 'font-weight: bold !important; ';
-          if (style.italic) cssProps += 'font-style: italic !important; ';
-          if (style.underline) cssProps += 'text-decoration: underline !important; ';
+          
+          // Apply only color and background styles (which are controlled by applyStyles flag)
           if (style.textColor) cssProps += `color: ${style.textColor} !important; `;
           if (style.backgroundColor) cssProps += `background-color: ${style.backgroundColor} !important; `;
-          if (style.alignH) cssProps += `text-align: ${style.alignH} !important; `;
 
           // Add border styles if specified
           if (style.borderStyle && style.borderWidth && style.borderColor && style.borderSides) {
@@ -1721,16 +1699,10 @@ export const useGridStore = create<GridStore>()(
               const styles = pendingHeaderStyles[columnField];
               if (!styles) return;
 
-              // Convert styles object to CSS - simplified selectors for better performance
+              // Convert styles object to CSS - only color, background and border styles
               let columnStyle = '';
-              if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
-              if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
-              if (styles.bold) columnStyle += 'font-weight: bold; ';
-              if (styles.italic) columnStyle += 'font-style: italic; ';
-              if (styles.underline) columnStyle += 'text-decoration: underline; ';
               if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
               if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
-              if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
 
               if (columnStyle) {
                 // Simplified selectors for better performance
@@ -1793,16 +1765,10 @@ export const useGridStore = create<GridStore>()(
               const styles = pendingCellStyles[columnField];
               if (!styles) return;
 
-              // Convert styles object to CSS - simplified for better performance
+              // Convert styles object to CSS - only color, background and border styles
               let columnStyle = '';
-              if (styles.fontFamily) columnStyle += `font-family: ${styles.fontFamily}; `;
-              if (styles.fontSize) columnStyle += `font-size: ${styles.fontSize}; `;
-              if (styles.bold) columnStyle += 'font-weight: bold; ';
-              if (styles.italic) columnStyle += 'font-style: italic; ';
-              if (styles.underline) columnStyle += 'text-decoration: underline; ';
               if (styles.textColor) columnStyle += `color: ${styles.textColor}; `;
               if (styles.backgroundColor) columnStyle += `background-color: ${styles.backgroundColor}; `;
-              if (styles.alignH) columnStyle += `text-align: ${styles.alignH}; `;
 
               if (columnStyle) {
                 // Simplified selectors for better performance
@@ -2076,7 +2042,54 @@ export const useGridStore = create<GridStore>()(
             }
           }
 
-          // Apply header styles using batched operations
+          // Always apply font family, font size, font weight, and text alignment regardless of applyStyles flag
+          if (columnSettings.header) {
+            // Apply font styling via colDef directly (this is independent of the applyStyles flag)
+            // These font properties will always be applied even if applyStyles is false
+            if (columnSettings.header.fontFamily) {
+              colDef.headerComponentParams = {
+                ...colDef.headerComponentParams,
+                fontFamily: columnSettings.header.fontFamily
+              };
+            }
+            
+            if (columnSettings.header.fontSize) {
+              colDef.headerComponentParams = {
+                ...colDef.headerComponentParams,
+                fontSize: columnSettings.header.fontSize
+              };
+            }
+            
+            if (columnSettings.header.fontWeight || columnSettings.header.bold) {
+              colDef.headerComponentParams = {
+                ...colDef.headerComponentParams,
+                fontWeight: columnSettings.header.bold ? 'bold' : columnSettings.header.fontWeight
+              };
+            }
+            
+            if (columnSettings.header.italic) {
+              colDef.headerComponentParams = {
+                ...colDef.headerComponentParams,
+                fontStyle: 'italic'
+              };
+            }
+            
+            if (columnSettings.header.underline) {
+              colDef.headerComponentParams = {
+                ...colDef.headerComponentParams,
+                textDecoration: 'underline'
+              };
+            }
+            
+            if (columnSettings.header.alignH) {
+              colDef.headerComponentParams = {
+                ...colDef.headerComponentParams,
+                textAlign: columnSettings.header.alignH
+              };
+            }
+          }
+          
+          // Apply color, background, and border styles only if applyStyles is true
           if (columnSettings.header && columnSettings.header.applyStyles === true) {
             // Set header class with both attribute and function approach for maximum compatibility
             colDef.headerClass = (params) => {
@@ -2087,8 +2100,17 @@ export const useGridStore = create<GridStore>()(
               return [`custom-header-${columnField}`, ...existingClasses].join(' ');
             };
 
-            // Batch header styles through the store
-            get().batchApplyHeaderStyles(columnField, columnSettings.header);
+            // Batch header styles through the store - but only for color, background, and border
+            const styleProperties = {
+              textColor: columnSettings.header.textColor,
+              backgroundColor: columnSettings.header.backgroundColor,
+              borderStyle: columnSettings.header.borderStyle,
+              borderWidth: columnSettings.header.borderWidth,
+              borderColor: columnSettings.header.borderColor,
+              borderSides: columnSettings.header.borderSides
+            };
+            
+            get().batchApplyHeaderStyles(columnField, styleProperties);
           } else {
             // Remove header class but keep any other classes that might be there
             if (typeof colDef.headerClass === 'string') {
@@ -2109,7 +2131,54 @@ export const useGridStore = create<GridStore>()(
             });
           }
 
-          // Apply cell styles using batched operations
+          // Always apply font family, font size, font weight, and text alignment regardless of applyStyles flag
+          if (columnSettings.cell) {
+            // Apply font styling via colDef directly (this is independent of the applyStyles flag)
+            // These font properties will always be applied even if applyStyles is false
+            if (columnSettings.cell.fontFamily) {
+              colDef.cellStyle = {
+                ...colDef.cellStyle,
+                fontFamily: columnSettings.cell.fontFamily
+              };
+            }
+            
+            if (columnSettings.cell.fontSize) {
+              colDef.cellStyle = {
+                ...colDef.cellStyle,
+                fontSize: columnSettings.cell.fontSize
+              };
+            }
+            
+            if (columnSettings.cell.fontWeight || columnSettings.cell.bold) {
+              colDef.cellStyle = {
+                ...colDef.cellStyle,
+                fontWeight: columnSettings.cell.bold ? 'bold' : columnSettings.cell.fontWeight
+              };
+            }
+            
+            if (columnSettings.cell.italic) {
+              colDef.cellStyle = {
+                ...colDef.cellStyle,
+                fontStyle: 'italic'
+              };
+            }
+            
+            if (columnSettings.cell.underline) {
+              colDef.cellStyle = {
+                ...colDef.cellStyle,
+                textDecoration: 'underline'
+              };
+            }
+            
+            if (columnSettings.cell.alignH) {
+              colDef.cellStyle = {
+                ...colDef.cellStyle,
+                textAlign: columnSettings.cell.alignH
+              };
+            }
+          }
+          
+          // Apply color, background, and border styles only if applyStyles is true
           if (columnSettings.cell && columnSettings.cell.applyStyles === true) {
             // Set cell class with both attribute and function approach for maximum compatibility
             colDef.cellClass = (params) => {
@@ -2120,8 +2189,17 @@ export const useGridStore = create<GridStore>()(
               return [`custom-cell-${columnField}`, ...existingClasses].join(' ');
             };
 
-            // Batch cell styles through the store
-            get().batchApplyCellStyles(columnField, columnSettings.cell);
+            // Batch cell styles through the store - but only for color, background, and border
+            const styleProperties = {
+              textColor: columnSettings.cell.textColor,
+              backgroundColor: columnSettings.cell.backgroundColor,
+              borderStyle: columnSettings.cell.borderStyle,
+              borderWidth: columnSettings.cell.borderWidth,
+              borderColor: columnSettings.cell.borderColor,
+              borderSides: columnSettings.cell.borderSides
+            };
+            
+            get().batchApplyCellStyles(columnField, styleProperties);
           } else {
             // Remove cell class but keep any other classes that might be there
             if (typeof colDef.cellClass === 'string') {

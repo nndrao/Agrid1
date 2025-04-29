@@ -63,7 +63,7 @@ export const HeaderTab: React.FC<HeaderTabProps> = ({ settings, onUpdate }) => {
             }}
           />
           <Label htmlFor="apply-header-styles" className="text-sm font-medium cursor-pointer">
-            Apply these styles to the grid header
+            Apply color, background and border styles to the grid header
           </Label>
         </div>
         
