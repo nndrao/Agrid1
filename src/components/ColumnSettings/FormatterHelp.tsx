@@ -78,6 +78,21 @@ export const FormatterHelpContent: React.FC = () => {
               <li>Format: <code>[condition]true_format:false_format</code></li>
               <li>Operators: &gt;, &gt;=, &lt;, &lt;=, =, &lt;&gt; (not equal)</li>
               <li>Can nest other formats in each part</li>
+              <li className="mt-1 text-muted-foreground">Example with color:</li>
+              <li><code className="bg-muted px-1 rounded">[&gt;100][Green]"High":[Red]"Low"</code></li>
+              <li>This applies green "High" text for values &gt;100, red "Low" text otherwise</li>
+            </ul>
+          </div>
+          
+          <div>
+            <h5 className="font-medium mb-1">Nested Conditions</h5>
+            <ul className="ml-4 text-xs space-y-1">
+              <li><code className="bg-muted px-1 rounded">[&gt;100][&gt;200]"Very High":"High":[&lt;50]"Very Low":"Low"</code></li>
+              <li>First condition: if value &gt; 100</li>
+              <li>├─ True branch: if value &gt; 200, "Very High", else "High"</li>
+              <li>└─ False branch: if value &lt; 50, "Very Low", else "Low"</li>
+              <li className="mt-1">You can add colors to any level:</li>
+              <li><code className="bg-muted px-1 rounded">[&gt;100][Green][&gt;200]"Very High":"High":[Red][&lt;50]"Very Low":"Low"</code></li>
             </ul>
           </div>
           
@@ -88,6 +103,8 @@ export const FormatterHelpContent: React.FC = () => {
               <li>Format: <code>[value1]format1;[value2]format2;default</code></li>
               <li>The last section is the default (fallback)</li>
               <li>Each case can contain any valid format</li>
+              <li className="mt-1 text-muted-foreground">Example with colors:</li>
+              <li><code className="bg-muted px-1 rounded">[1][Green]"Active";[0][Red]"Inactive";"Unknown"</code></li>
             </ul>
           </div>
           
@@ -98,6 +115,9 @@ export const FormatterHelpContent: React.FC = () => {
               <li><code className="bg-muted px-1 rounded">[#FF5500]0.00</code> - Custom hex color</li>
               <li><code className="bg-muted px-1 rounded">[#39C]0.00</code> - 3-digit hex (#3399CC)</li>
               <li>Named colors: Red, Green, Blue, Yellow, Cyan, Magenta, etc.</li>
+              <li className="mt-1 text-muted-foreground">Combining with sections:</li>
+              <li><code className="bg-muted px-1 rounded">[Green]0.00;[Red]-0.00;0.00</code></li>
+              <li>Green for positive, Red for negative, default for zero</li>
             </ul>
           </div>
         </TabsContent>
@@ -128,6 +148,28 @@ export const FormatterHelpContent: React.FC = () => {
                   <li>≥90% in green</li>
                   <li>≥70% in blue</li>
                   <li>Others in red</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+          
+          <div>
+            <h5 className="font-medium mb-1">KPI Indicators</h5>
+            <ul className="ml-4 text-xs space-y-1">
+              <li><code className="bg-muted px-1 rounded text-wrap">[&gt;100][Green]"✓ Above Target";[=100][Blue]"= On Target";[Red]"✗ Below Target"</code></li>
+              <li className="ml-4">Different colors and messages based on performance vs target</li>
+            </ul>
+          </div>
+          
+          <div>
+            <h5 className="font-medium mb-1">Simple Heatmap</h5>
+            <ul className="ml-4 text-xs space-y-1">
+              <li><code className="bg-muted px-1 rounded text-wrap">[&gt;0.7][#009900]0.0%;[&gt;0.3][#FFCC00]0.0%;[#FF0000]0.0%</code></li>
+              <li className="ml-4">Traffic light color coding for percentages:
+                <ul className="ml-2 mt-1">
+                  <li>Green (&gt;70%)</li>
+                  <li>Yellow (&gt;30%)</li>
+                  <li>Red (≤30%)</li>
                 </ul>
               </li>
             </ul>
