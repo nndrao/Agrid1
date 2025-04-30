@@ -525,10 +525,6 @@ export function DataTableToolbar() {
 
         <div className="border-l h-8 mx-1"></div>
 
-
-
-
-
         {/* Density Controls */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

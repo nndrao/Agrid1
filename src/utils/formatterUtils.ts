@@ -43,16 +43,16 @@ export function getConditionalColor(format: string, value: any): string | null {
   }
 
   const numValue = Number(value);
-  
+
   // We'll use multiple regex executions instead of matchAll for compatibility
   const conditionalRegex = /\[(>|>=|<|<=|=|<>)(-?\d+(\.\d+)?)\]\[(Red|Green|Blue|Yellow|Cyan|Magenta|Black|White|Gray|Orange|Purple|Brown|#[0-9A-Fa-f]{3,6})\]/gi;
-  
+
   let match;
   while ((match = conditionalRegex.exec(format)) !== null) {
     const operator = match[1];
     const compareValue = parseFloat(match[2]);
     const colorName = match[4].toLowerCase();
-    
+
     // Check condition
     let conditionMet = false;
     switch (operator) {
@@ -63,7 +63,7 @@ export function getConditionalColor(format: string, value: any): string | null {
       case '=': conditionMet = numValue === compareValue; break;
       case '<>': conditionMet = numValue !== compareValue; break;
     }
-    
+
     if (conditionMet) {
       // Apply color if condition is met
       if (colorName.startsWith('#')) {
@@ -73,7 +73,7 @@ export function getConditionalColor(format: string, value: any): string | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -82,15 +82,15 @@ export function getConditionalColor(format: string, value: any): string | null {
  */
 export function getSwitchCaseColor(format: string, value: any): string | null {
   const valueStr = value !== null && value !== undefined ? String(value) : '';
-  
+
   // We'll use multiple regex executions instead of matchAll for compatibility
   const switchRegex = /\[([^\]]+)\]\[(Red|Green|Blue|Yellow|Cyan|Magenta|Black|White|Gray|Orange|Purple|Brown|#[0-9A-Fa-f]{3,6})\]/gi;
-  
+
   let match;
   while ((match = switchRegex.exec(format)) !== null) {
     const caseValue = match[1];
     const colorName = match[2].toLowerCase();
-    
+
     if (caseValue === valueStr) {
       // Apply color if case matches
       if (colorName.startsWith('#')) {
@@ -100,7 +100,7 @@ export function getSwitchCaseColor(format: string, value: any): string | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -111,9 +111,9 @@ export function getSectionColor(format: string, value: any): string | null {
   if (!format.includes(';')) {
     return null;
   }
-  
+
   const sections = format.split(';');
-  
+
   // Determine which section to use based on value
   let sectionIndex = 0;
   if (typeof value === 'number' || !isNaN(Number(value))) {
@@ -126,47 +126,35 @@ export function getSectionColor(format: string, value: any): string | null {
   } else if (value !== null && value !== undefined && sections.length > 3) {
     sectionIndex = 3; // Text section
   }
-  
+
   // Get color from the selected section
   if (sectionIndex < sections.length) {
     return getColorFromFormat(sections[sectionIndex]);
   }
-  
+
   return null;
 }
 
 /**
  * Calculate cell text color based on Excel-like format string
+ * using the new Excel formatter module
  */
+import { formatExcelValue } from '@/utils/formatters';
+
 export function calculateCellColor(format: string, value: any): string | null {
   try {
-    // 1. Check for direct color format [Red]
-    const directColor = getColorFromFormat(format);
-    if (directColor) {
-      return directColor;
+    // Skip formatting for null/undefined values
+    if (value === null || value === undefined) {
+      return null;
     }
-    
-    // 2. Check for conditional formatting [>100][Red]
-    const conditionalColor = getConditionalColor(format, value);
-    if (conditionalColor) {
-      return conditionalColor;
-    }
-    
-    // 3. Check for switch/case formatting [1][Red]
-    const switchCaseColor = getSwitchCaseColor(format, value);
-    if (switchCaseColor) {
-      return switchCaseColor;
-    }
-    
-    // 4. Check for section formatting (positive;negative;zero)
-    const sectionColor = getSectionColor(format, value);
-    if (sectionColor) {
-      return sectionColor;
-    }
-    
-    return null;
+
+    // Use the new Excel formatter module
+    const result = formatExcelValue({ value }, format);
+
+    // Return the color if specified
+    return result.color || null;
   } catch (error) {
     console.error('Error calculating cell color:', error);
     return null;
   }
-} 
+}

@@ -8,8 +8,7 @@ import { DataTableToolbar } from './Toolbar/DataTableToolbar';
 import { createGridTheme } from './theme/grid-theme';
 import { generateColumnDefs } from './utils/column-utils';
 import { useApplyColumnProfiles } from '@/components/ColumnSettings/useApplyColumnProfiles';
-
-
+// import { useGridStore } from '@/store/gridStore';
 import { useGridStore } from '@/store/gridStore';
 
 // Register AG Grid Enterprise modules
@@ -32,16 +31,20 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     applySettingsToGrid,
     getActiveProfile,
     getColumnSettings,
-    applyColumnSettings
+    applyColumnSettings,
+    styleBatch
   } = useGridStore();
 
   // Local state
   // Default font value
   const defaultFontValue = "'JetBrains Mono', monospace";
 
+  // Compute font size from settings (fallback to 14)
+  const fontValue = settings?.font?.value || defaultFontValue;
+
   // Initialize with safe access to settings
   const [gridTheme, setGridTheme] = useState(() =>
-    createGridTheme(settings?.font?.value || defaultFontValue)
+    createGridTheme(fontValue)
   );
 
   const gridRef = useRef<AgGridReact>(null);
@@ -59,14 +62,12 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     // Set the theme mode on the body element
     document.body.dataset.agThemeMode = isDarkMode ? 'dark' : 'light';
 
-    // Create a new grid theme with the current font
-    const fontValue = settings?.font?.value || defaultFontValue;
+    // Update grid theme when font changes
     setGridTheme(createGridTheme(fontValue));
-
     if (process.env.NODE_ENV === 'development') {
       console.log('Grid theme updated:', { isDarkMode, fontValue });
     }
-  }, [isDarkMode, settings?.font?.value, defaultFontValue]);
+  }, [isDarkMode, fontValue]);
 
   // Initialize the store once on component mount
   useEffect(() => {
@@ -103,38 +104,17 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     applyGridSettings();
   }, [gridApi, activeProfileId]);
 
-  // Apply font family CSS variable directly without triggering grid refresh
-  useEffect(() => {
-    if (settings?.font?.value) {
-      // Only update the font family setting - less expensive operation
-      document.documentElement.style.setProperty('--ag-font-family', settings.font.value);
+  // Compute CSS variables and inject them via a <style> tag
+  const gridCssVars = `
+    :root {
+      --ag-font-family: ${settings?.font?.value || defaultFontValue};
+      --ag-grid-size: ${settings?.density ? 4 + (settings.density - 1) * 4 + 'px' : '8px'};
+      --ag-list-item-height: ${settings?.density ? (4 + (settings.density - 1) * 4) * 6 + 'px' : '48px'};
+      --ag-row-height: ${settings?.density ? (4 + (settings.density - 1) * 4) * 6 + 'px' : '48px'};
+      --ag-header-height: ${settings?.density ? (4 + (settings.density - 1) * 4) * 7 + 'px' : '56px'};
+      --ag-cell-horizontal-padding: ${settings?.density ? (4 + (settings.density - 1) * 4) * 1.5 + 'px' : '12px'};
     }
-  }, [settings?.font?.value]);
-
-  // Define default column properties - AG Grid 33+ syntax
-  const defaultColDef = useMemo(() => ({
-    flex: 1,
-    minWidth: 100,
-    filter: true,
-    sortable: true,
-    resizable: true,
-    enableValue: true,
-    enableRowGroup: true,
-    enablePivot: true,
-    editable: true,
-  }), []);
-
-  // Define column types for the grid - AG Grid 33+ syntax
-  const columnTypes = useMemo(() => ({
-    customNumeric: {
-      filter: 'agNumberColumnFilter',
-      headerClass: 'ag-right-aligned-header',
-      cellClass: 'ag-right-aligned-cell',
-    },
-    customDate: {
-      filter: 'agDateColumnFilter',
-    }
-  }), []);
+  `;
 
   // Batch all grid initialization steps in a single function
   const setupGridApi = useCallback((api: any) => {
@@ -167,7 +147,20 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
       setTimeout(() => {
         // Apply settings from current profile
         applyGridSettings();
-        
+
+        // Force apply column visibility from active profile
+        try {
+          // This is a direct call to force apply column visibility
+          // It will ensure column visibility is correctly applied from the active profile
+          const forceApplyColumnVisibility = useGridStore.getState().forceApplyColumnVisibility;
+          if (typeof forceApplyColumnVisibility === 'function') {
+            console.log('Force applying column visibility during initialization');
+            forceApplyColumnVisibility();
+          }
+        } catch (error) {
+          console.error('Error force applying column visibility during initialization:', error);
+        }
+
         // Force apply column profiles specifically for reload case
         // This is critical to ensure profile settings are applied on refresh
         try {
@@ -230,9 +223,39 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
     };
   }, []);
 
+  // Define default column properties - AG Grid 33+ syntax
+  const defaultColDef = useMemo(() => ({
+    flex: 1,
+    minWidth: 100,
+    filter: true,
+    sortable: true,
+    resizable: true,
+    enableValue: true,
+    enableRowGroup: true,
+    enablePivot: true,
+    editable: true,
+  }), []);
+
+  // Define column types for the grid - AG Grid 33+ syntax
+  const columnTypes = useMemo(() => ({
+    customNumeric: {
+      filter: 'agNumberColumnFilter',
+      headerClass: 'ag-right-aligned-header',
+      cellClass: 'ag-right-aligned-cell',
+    },
+    customDate: {
+      filter: 'agDateColumnFilter',
+    }
+  }), []);
+
   return (
     <div className="flex h-full flex-col rounded-md border bg-card">
       <DataTableToolbar />
+
+      {/* Style injection for grid CSS variables and batched styles */}
+      <style>{gridCssVars}</style>
+      {styleBatch?.appliedHeaderStyles && <style>{styleBatch.appliedHeaderStyles}</style>}
+      {styleBatch?.appliedCellStyles && <style>{styleBatch.appliedCellStyles}</style>}
 
       {/* AG Grid */}
       <div className="ag-theme-quartz flex-1">

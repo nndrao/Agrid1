@@ -1,6 +1,6 @@
 import { themeQuartz } from 'ag-grid-community';
 
-export function createGridTheme(fontFamily: string) {
+export function createGridTheme(fontFamily: string, fontSize: number) {
   return themeQuartz
     .withParams(
       {
@@ -13,10 +13,10 @@ export function createGridTheme(fontFamily: string) {
         checkboxBorderRadius: 2,
         columnBorder: true,
         fontFamily: fontFamily,
-        fontSize: 14,
+        fontSize: fontSize,
         headerBackgroundColor: '#EFEFEFD6',
         headerFontFamily: fontFamily,
-        headerFontSize: 14,
+        headerFontSize: fontSize,
         headerFontWeight: 500,
         iconButtonBorderRadius: 1,
         iconSize: 12,
@@ -34,6 +34,7 @@ export function createGridTheme(fontFamily: string) {
         borderRadius: 2,
         checkboxBorderRadius: 2,
         fontFamily: fontFamily,
+        fontSize: fontSize,
         browserColorScheme: 'dark',
         chromeBackgroundColor: {
           ref: 'foregroundColor',
@@ -41,10 +42,9 @@ export function createGridTheme(fontFamily: string) {
           onto: 'backgroundColor',
         },
         columnBorder: true,
-        fontSize: 14,
         foregroundColor: '#FFF',
         headerFontFamily: fontFamily,
-        headerFontSize: 14,
+        headerFontSize: fontSize,
         iconSize: 12,
         inputBorderRadius: 2,
         oddRowBackgroundColor: '#2A2E35',
